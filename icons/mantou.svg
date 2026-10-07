@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="88 92 336 336">
+  <defs>
+    <linearGradient id="crust" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B9611E"/>
+      <stop offset=".55" stop-color="#D98A3A"/>
+      <stop offset="1" stop-color="#EDB66A"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6D9A0"/>
+      <stop offset="1" stop-color="#E2A85C"/>
+    </linearGradient>
+    <linearGradient id="milk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF8E6"/>
+      <stop offset="1" stop-color="#F3E3B8"/>
+    </linearGradient>
+  </defs>
+  <!-- shadow -->
+  <ellipse cx="256" cy="402" rx="150" ry="22" fill="#000" opacity=".16"/>
+  <!-- pale lower band -->
+  <path d="M120 250 C120 228 136 214 158 214 H354 C376 214 392 228 392 250 V342 C392 378 366 398 330 398 H182 C146 398 120 378 120 342 Z" fill="url(#side)"/>
+  <!-- golden fried top -->
+  <path d="M112 268 C104 178 168 118 256 118 C344 118 408 178 400 268 C398 292 382 304 360 300 C330 294 300 298 256 298 C212 298 182 294 152 300 C130 304 114 292 112 268 Z" fill="url(#crust)"/>
+  <!-- condensed milk drizzle -->
+  <path d="M168 176 C196 150 236 140 268 142 C304 144 336 158 352 180 C360 192 354 204 340 202 C326 200 324 222 312 222 C298 222 302 200 286 198 C266 196 262 236 246 236 C230 236 236 200 216 200 C200 200 198 214 184 212 C166 210 158 188 168 176 Z" fill="url(#milk)"/>
+  <!-- shine and toasted speckles -->
+  <ellipse cx="206" cy="160" rx="22" ry="9" fill="#fff" opacity=".7" transform="rotate(-18 206 160)"/>
+  <g fill="#8E4413" opacity=".45">
+    <circle cx="150" cy="248" r="4"/><circle cx="178" cy="268" r="3"/><circle cx="372" cy="240" r="4"/>
+    <circle cx="344" cy="266" r="3"/><circle cx="388" cy="214" r="3"/><circle cx="128" cy="220" r="3"/>
+  </g>
+  <!-- seam between top and base -->
+  <path d="M152 300 C182 294 212 298 256 298 C300 298 330 294 360 300" fill="none" stroke="#C47A33" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+</svg>

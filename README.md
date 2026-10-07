@@ -1,4 +1,4 @@
-# Exchange Companion
+# Mantou
 
 An all-in-one app for an exchange semester at IE University in Madrid: budget and bill splitting, trips, flights, places to stay, timetable, deadlines, the IE 2026–27 calendar, a document wallet, packing lists, emergency info, saved places and a journal.
 

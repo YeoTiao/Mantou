@@ -1,7 +1,7 @@
 {
-  "name": "Exchange Companion",
-  "short_name": "Exchange",
-  "description": "Budget, trips, flights, stays, timetable and deadlines for an exchange semester.",
+  "name": "Mantou",
+  "short_name": "Mantou",
+  "description": "Your exchange companion: budget, trips, flights, flats, timetable and bill splitting.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
