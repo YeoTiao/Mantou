@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exchange Companion</title>
+<meta name="description" content="Budget, trips, flights, stays, timetable and deadlines for an exchange semester.">
+<meta name="theme-color" content="#0B6E69">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Exchange">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="config.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one-column phone app with a bottom tab bar; on wide screens the bar moves to the top and content caps at 760px. */
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --sunk:#E3E9E8; --line:#D3DCDA;
+  --fg:#14232B; --muted:#5B6B70; --accent:#0B6E69; --accent-ink:#FFFFFF; --accent-soft:#D5EBE8;
+  --stamp:#B7791F; --stamp-soft:#F6E9D2; --good:#2E7D4F; --warn:#B7791F; --bad:#B3392F;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0F181B; --surface:#172327; --sunk:#1E2C31; --line:#2A3B40;
+  --fg:#E5EEEC; --muted:#93A6A9; --accent:#4FC1B8; --accent-ink:#06201E; --accent-soft:#183B3A;
+  --stamp:#E3B15C; --stamp-soft:#3A2F1B; --good:#6CC891; --warn:#E3B15C; --bad:#EF7E72; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0F181B; --surface:#172327; --sunk:#1E2C31; --line:#2A3B40;
+  --fg:#E5EEEC; --muted:#93A6A9; --accent:#4FC1B8; --accent-ink:#06201E; --accent-soft:#183B3A;
+  --stamp:#E3B15C; --stamp-soft:#3A2F1B; --good:#6CC891; --warn:#E3B15C; --bad:#EF7E72; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:1.75rem;line-height:1.1}
+h2{font-size:1.2rem}
+h3{font-size:1rem}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:16px 110px;display:flex;flex-direction:column;gap:18px}
+.muted{color:var(--muted)}
+.small{font-size:.82rem}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.stack{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.sect-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:16px;color:var(--muted);font-size:.9rem}
+
+/* top bar */
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:.8rem}
+.save-pill{font-size:.75rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.save-pill.ok{background:var(--accent-soft);color:var(--accent)}
+
+/* nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+nav.tabs .in{display:flex;width:100%;max-width:760px}
+nav.tabs button{flex:1;background:none;border:0;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.72rem;color:var(--muted);cursor:pointer;border-radius:10px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
+nav.tabs button:focus-visible{outline:2px solid var(--accent)}
+@media (min-width:820px){
+  nav.tabs{top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--line);padding-top:calc(6px + env(safe-area-inset-top,0px))}
+  nav.tabs button{flex-direction:row;justify-content:center;gap:8px;font-size:.9rem;padding:8px}
+  .wrap{padding-block:84px 48px}
+}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:.9rem}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:none;border-color:transparent;color:var(--accent);padding-inline:6px}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:.82rem}
+.btn:focus-visible,.chip:focus-visible,.item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:flex;background:var(--sunk);border-radius:11px;padding:3px;gap:3px;overflow-x:auto}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-weight:600;font-size:.88rem;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* list items */
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--sunk)}
+.item .main{flex:1;min-width:0}
+.item .t{font-weight:600;overflow-wrap:anywhere}
+.item .s{font-size:.82rem;color:var(--muted);overflow-wrap:anywhere}
+.item .r{text-align:right;white-space:nowrap}
+.tag{display:inline-block;font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--sunk);color:var(--muted);letter-spacing:.02em}
+.tag.accent{background:var(--accent-soft);color:var(--accent)}
+.tag.stamp{background:var(--stamp-soft);color:var(--stamp)}
+.tag.bad{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.tag.good{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.check{width:22px;height:22px;border-radius:7px;border:2px solid var(--line);flex:none;display:grid;place-items:center;background:var(--surface);cursor:pointer}
+.check.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.done .t{text-decoration:line-through;color:var(--muted)}
+
+/* hero */
+.hero{background:var(--accent);color:var(--accent-ink);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden}
+.hero .eyebrow{color:inherit;opacity:.8;padding-right:84px}
+.hero h1{font-size:2rem}
+.hero .bar{height:8px;background:color-mix(in srgb,var(--accent-ink) 22%,transparent);border-radius:99px;overflow:hidden}
+.hero .bar i{display:block;height:100%;background:var(--accent-ink);border-radius:99px}
+.hero .stampmark{position:absolute;right:-14px;top:-14px;width:110px;height:110px;border:2.5px dashed color-mix(in srgb,var(--accent-ink) 35%,transparent);border-radius:50%;display:grid;place-items:center;transform:rotate(-14deg);font-family:var(--mono);font-size:.7rem;text-align:center;line-height:1.2;opacity:.9}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.stat .v{font-family:var(--display);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* budget */
+.meter{height:10px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.meter.over i{background:var(--bad)}
+.cat-row{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;font-size:.86rem}
+.cat-row .meter{height:7px}
+
+/* boarding pass */
+.pass{display:grid;grid-template-columns:1fr auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;text-align:left;padding:0;width:100%}
+.pass .body{padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pass .stub{border-left:2px dashed var(--line);padding:14px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:96px;background:var(--sunk)}
+.iata{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:1.6rem;letter-spacing:.02em}
+.iata .line{flex:1;height:0;border-top:2px dotted var(--muted);position:relative;min-width:24px}
+.iata small{display:block;font-family:var(--body);font-weight:500;font-size:.75rem;color:var(--muted);letter-spacing:0}
+
+/* timetable */
+.class{display:grid;grid-template-columns:62px 1fr;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.class:last-child{border-bottom:0}
+.class .time{font-family:var(--mono);font-size:.82rem;line-height:1.3}
+.class .code{font-family:var(--mono);font-size:.75rem;font-weight:700;color:var(--accent)}
+.week{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.week .col{display:flex;flex-direction:column;gap:5px}
+.week .dh{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
+.week .blk{background:var(--accent-soft);color:var(--fg);border-radius:8px;padding:5px 6px;font-size:.7rem;line-height:1.25;border:0;text-align:left;cursor:pointer;overflow:hidden}
+.week .blk b{font-family:var(--mono);display:block;color:var(--accent)}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(5,15,18,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+@media (min-width:620px){.scrim{align-items:center}.sheet{border-radius:18px}}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:.8rem;font-weight:600;color:var(--muted)}
+.field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;min-width:0}
+.field textarea{min-height:80px;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+.field.cb{flex-direction:row;align-items:center;gap:8px}
+.field.cb input{width:auto}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fields .full{grid-column:1/-1}
+.hint{font-size:.76rem;color:var(--muted)}
+.more-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.tile:hover{border-color:var(--accent)}
+.tile svg{width:22px;height:22px;color:var(--accent)}
+.tile .s{font-size:.78rem;color:var(--muted)}
+.banner{background:var(--stamp-soft);color:var(--fg);border-radius:var(--r);padding:12px 14px;font-size:.88rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:.85rem;z-index:60}
+.daygroup{font-size:.75rem;font-weight:600;color:var(--muted);padding:8px 14px 4px;background:var(--sunk);text-transform:uppercase;letter-spacing:.06em}
+.tl{display:flex;flex-direction:column;gap:0}
+@media (max-width:480px){.fields{grid-template-columns:1fr}.cat-row{grid-template-columns:80px 1fr auto}.iata{font-size:1.3rem}}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
+</style>
+
+</head>
+<body>
+<nav class="tabs" aria-label="Sections"><div class="in" id="tabs"></div></nav>
+<main class="wrap" id="app" aria-live="polite"></main>
+<div id="sheetRoot"></div>
+<input type="file" id="importFile" accept="application/json" hidden>
+
+<script>
+(function(){
+"use strict";
+/* ---------- icons ---------- */
+const I = {
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
+  money:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14.5" r="1.4"/></svg>',
+  travel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l19-6-3 9-6-2-3 4v-5"/><path d="M12.5 14.5l9-7"/></svg>',
+  school:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17h8"/></svg>',
+  pack:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 12h8"/></svg>',
+  sos:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 19V5"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>'
+};
+
+/* ---------- constants ---------- */
+const CURRENCIES = ["SGD","EUR","GBP","USD","AUD","NZD","CAD","CHF","SEK","NOK","DKK","JPY","KRW","CNY","HKD","TWD","THB","MYR","IDR","INR"];
+// Approximate value of 1 unit in SGD. Editable in Settings.
+const DEFAULT_RATES_SGD = {SGD:1,EUR:1.50,GBP:1.73,USD:1.30,AUD:0.86,NZD:0.78,CAD:0.95,CHF:1.62,SEK:0.135,NOK:0.125,DKK:0.20,JPY:0.0088,KRW:0.00095,CNY:0.18,HKD:0.167,TWD:0.041,THB:0.039,MYR:0.30,IDR:0.00008,INR:0.0155};
+const CATS = ["Rent","Food","Groceries","Transport","Travel","School","Fun","Shopping","Phone & bills","Other"];
+const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#0B8A83","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#0B8A83"};
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal"];
+
+const DEFAULT_SETTINGS = {city:"Madrid", country:"Spain", school:"IE University", start:"2027-01-11", end:"2027-05-28", home:"SGD", local:"EUR", myName:"", budget:1500, rates:Object.assign({},DEFAULT_RATES_SGD), hasExamples:false};
+
+/* ---------- state ---------- */
+let S = {};
+function blank(){ const s={settings:JSON.parse(JSON.stringify(DEFAULT_SETTINGS))}; SECTIONS.slice(1).forEach(k=>s[k]=[]); return s; }
+S = blank();
+const ui = {tab:"home", travelSeg:"trips", schoolDay:null, month:null, more:null, openTrip:null, saveMode:"local", toast:null};
+try { const t = localStorage.getItem("xc.tab"); if (t) ui.tab = t; } catch(e){}
+
+/* ---------- storage: account (db) with device cache ---------- */
+let db = null, uid = null; const pending = {}; let flushTimer = null;
+function cacheLocal(){ try { localStorage.setItem("xc.data", JSON.stringify(S)); } catch(e){} }
+function loadLocal(){ try { const raw = localStorage.getItem("xc.data"); if (raw){ const d = JSON.parse(raw); merge(d); return true; } } catch(e){} return false; }
+function merge(d){ SECTIONS.forEach(k=>{ if (d && d[k] !== undefined) S[k] = k==="settings" ? Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), d[k]) : d[k]; }); if (!S.settings.rates) S.settings.rates = Object.assign({},DEFAULT_RATES_SGD); }
+function save(...secs){ cacheLocal(); render(); }
+async function initStore(){
+  loadLocal();
+  render();
+  initFirebase();
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+function loadScript(src){ return new Promise((ok,bad)=>{ const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = bad; document.head.appendChild(el); }); }
+async function initFirebase(){
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey){ SH.status = "unconfigured"; render(); return; }
+  SH.status = "loading";
+  try {
+    const v = "10.12.2", base = "https://www.gstatic.com/firebasejs/"+v+"/";
+    await loadScript(base+"firebase-app-compat.js");
+    await Promise.all([loadScript(base+"firebase-auth-compat.js"), loadScript(base+"firebase-firestore-compat.js")]);
+    firebase.initializeApp(cfg);
+    const fs = firebase.firestore();
+    try { await fs.enablePersistence({synchronizeTabs:true}); } catch(e){}
+    firebase.auth().onAuthStateChanged(async user=>{
+      if (!user){ try { await firebase.auth().signInAnonymously(); } catch(e){ SH.status = "error"; render(); } return; }
+      db = fs; uid = user.uid;
+      await joinFromLink();
+      startShared();
+    });
+  } catch(e){ SH.status = "offline"; render(); }
+}
+async function joinFromLink(){
+  const m = location.hash.match(/^#join=([A-Za-z0-9_-]{6,40})$/); if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  try { await db.collection("shared").doc(m[1]).update({memberUids: firebase.firestore.FieldValue.arrayUnion(uid)});
+    ui.tab = "travel"; ui.travelSeg = "friends"; SH.open = m[1]; SH.seg = "plan"; SH.waitUntil = Date.now()+5000; toast("You've joined the trip");
+  } catch(e){ toast("That invite link didn't work. Ask for a new one."); }
+}
+
+/* ---------- helpers ---------- */
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uidGen = () => Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const today = () => iso(new Date());
+const parseD = s => { if(!s) return null; const [y,m,d] = s.slice(0,10).split("-").map(Number); return new Date(y,m-1,d); };
+const addDays = (s,n) => { const d = parseD(s); d.setDate(d.getDate()+n); return iso(d); };
+const daysBetween = (a,b) => Math.round((parseD(b)-parseD(a))/864e5);
+const fmtD = (s,opts) => s ? parseD(s).toLocaleDateString(undefined, opts||{day:"numeric",month:"short"}) : "";
+const fmtDW = s => fmtD(s,{weekday:"short",day:"numeric",month:"short"});
+const fmtTime = s => s && s.length>10 ? s.slice(11,16) : "";
+const dowIdx = s => (parseD(s).getDay()+6)%7;
+function rate(cur){ const r = S.settings.rates||{}; const home = S.settings.home; if (cur===home) return 1; const a = r[cur], b = r[home]; if (a==null) return 1; return b ? a/b : a; }
+// rates are stored as "1 unit = x SGD"; convert via SGD so the home currency can change.
+const toHome = (amt,cur) => (Number(amt)||0) * rate(cur||S.settings.home);
+function money(v,cur,dp){ cur = cur||S.settings.home; const n = Number(v)||0; const d = dp!=null?dp:(["JPY","KRW","IDR"].includes(cur)?0:(Math.abs(n)>=1000?0:2));
+  return cur+" "+n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function myShare(e){ if (e.settle) return 0; const others = splitNames(e.splitWith); return toHome(e.amount,e.cur)/(others.length+1); }
+function splitNames(s){ return String(s||"").split(",").map(x=>x.trim()).filter(Boolean).filter(x=>x.toLowerCase()!=="me"); }
+const isMe = p => !p || p.trim().toLowerCase()==="me";
+function toast(msg){ ui.toast = msg; renderToast(); clearTimeout(toast.t); toast.t = setTimeout(()=>{ui.toast=null;renderToast();},2200); }
+function renderToast(){ let el = document.getElementById("toast"); if (!ui.toast){ if (el) el.remove(); return; } if(!el){ el=document.createElement("div"); el.id="toast"; el.className="toast"; el.setAttribute("role","status"); document.body.appendChild(el);} el.textContent = ui.toast; }
+
+/* ---------- form schemas ---------- */
+const curOpts = () => CURRENCIES.map(c=>[c,c]);
+const tripOpts = () => [["","(none)"]].concat(S.trips.map(t=>[t.id,t.name]));
+const SCHEMA = {
+  expenses:{title:"Expense", fields:[
+    {k:"amount",label:"Amount",type:"number",req:true},{k:"cur",label:"Currency",type:"select",opts:curOpts,def:()=>S.settings.local},
+    {k:"cat",label:"Category",type:"select",opts:()=>CATS.map(c=>[c,c]),def:"Food"},{k:"date",label:"Date",type:"date",def:today},
+    {k:"note",label:"What was it?",type:"text",full:true},
+    {k:"paidBy",label:"Paid by",type:"text",def:"me",hint:"\"me\" or a friend's name"},{k:"splitWith",label:"Split with",type:"text",hint:"Friends' names, comma separated"},
+    {k:"tripId",label:"Trip",type:"select",opts:tripOpts,full:true}]},
+  trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"note",label:"Notes",type:"textarea",full:true}]},
+  plans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"textarea",full:true}]},
+  flights:{title:"Flight", fields:[{k:"from",label:"From (airport code)",type:"text",req:true,upper:true},{k:"to",label:"To (airport code)",type:"text",req:true,upper:true},
+    {k:"dep",label:"Departs",type:"datetime-local",req:true},{k:"arr",label:"Arrives",type:"datetime-local"},{k:"airline",label:"Airline",type:"text"},{k:"num",label:"Flight no.",type:"text",upper:true},
+    {k:"ref",label:"Booking ref",type:"text",upper:true},{k:"status",label:"Status",type:"select",opts:()=>[["idea","Just an idea"],["watching","Watching price"],["booked","Booked"]],def:"booked"},
+    {k:"price",label:"Price",type:"number"},{k:"cur",label:"Currency",type:"select",opts:curOpts,def:()=>S.settings.home},{k:"note",label:"Notes (baggage, seat, terminal)",type:"text",full:true}]},
+  stays:{title:"Accommodation", fields:[{k:"name",label:"Name",type:"text",req:true,full:true},{k:"kind",label:"Type",type:"select",opts:()=>["Student housing","Hostel","Hotel","Airbnb","Friend's place","Other"].map(x=>[x,x]),def:"Hostel"},
+    {k:"status",label:"Status",type:"select",opts:()=>[["idea","Shortlisted"],["booked","Booked"]],def:"booked"},
+    {k:"checkin",label:"Check-in",type:"date",req:true},{k:"checkout",label:"Check-out",type:"date",req:true},{k:"address",label:"Address",type:"text",full:true},
+    {k:"ref",label:"Booking ref",type:"text"},{k:"paid",label:"Already paid",type:"checkbox"},{k:"price",label:"Total price",type:"number"},{k:"cur",label:"Currency",type:"select",opts:curOpts,def:()=>S.settings.local},{k:"note",label:"Notes",type:"text",full:true}]},
+  classes:{title:"Class", fields:[{k:"code",label:"Course code",type:"text",upper:true},{k:"name",label:"Course name",type:"text",req:true},{k:"day",label:"Day",type:"select",opts:()=>DAYS.map((d,i)=>[String(i),d]),def:"0"},{k:"kind",label:"Type",type:"select",opts:()=>["Lecture","Tutorial","Lab","Seminar"].map(x=>[x,x]),def:"Lecture"},
+    {k:"start",label:"Starts",type:"time",req:true},{k:"end",label:"Ends",type:"time",req:true},{k:"room",label:"Room",type:"text"},{k:"prof",label:"Lecturer",type:"text"},{k:"ects",label:"Credits (ECTS)",type:"number"}]},
+  deadlines:{title:"Deadline", fields:[{k:"title",label:"What's due",type:"text",req:true,full:true},{k:"kind",label:"Type",type:"select",opts:()=>["Assignment","Exam","Admin","Visa / permit"].map(x=>[x,x]),def:"Assignment"},{k:"course",label:"Course code",type:"text",upper:true},{k:"due",label:"Due date",type:"date",req:true},{k:"done",label:"Done",type:"checkbox"},{k:"note",label:"Notes",type:"text",full:true}]},
+  wallet:{title:"Document", fields:[{k:"name",label:"Document",type:"text",req:true,full:true,hint:"Passport, visa, insurance, student ID, residence permit…"},{k:"number",label:"Number / policy no.",type:"text"},{k:"expiry",label:"Expires",type:"date"},{k:"note",label:"Where the original is, hotline, etc.",type:"textarea",full:true}]},
+  packing:{title:"Packing item", fields:[{k:"text",label:"Item",type:"text",req:true,full:true},{k:"list",label:"List",type:"select",opts:()=>["Before departure","Weekend trip","Going home"].map(x=>[x,x]),def:"Before departure",full:true},{k:"done",label:"Packed",type:"checkbox"}]},
+  contacts:{title:"Emergency contact", fields:[{k:"label",label:"Who",type:"text",req:true,full:true},{k:"value",label:"Phone / email",type:"text",req:true,full:true},{k:"note",label:"Notes",type:"text",full:true}]},
+  places:{title:"Place", fields:[{k:"name",label:"Name",type:"text",req:true,full:true},{k:"kind",label:"Type",type:"select",opts:()=>["Food","Café","Study spot","Sight","Nightlife","Shop","Campus","Other"].map(x=>[x,x]),def:"Food"},{k:"city",label:"City",type:"text"},{k:"visited",label:"Been there",type:"checkbox"},{k:"note",label:"Notes",type:"text",full:true}]},
+  sharedTrips:{title:"Shared trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},
+    {k:"members",label:"Who's going",type:"text",req:true,full:true,hint:"Names, comma separated. Include yourself.",def:()=>myName()},{k:"cur",label:"Split bills in",type:"select",opts:curOpts,def:"EUR"}]},
+  sharedPlans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"text",full:true}]},
+  sharedExp:{title:"Shared expense", fields:[{k:"note",label:"What was it?",type:"text",req:true,full:true},{k:"amount",label:"Amount",type:"number",req:true},{k:"cur",label:"Currency",type:"select",opts:curOpts,def:()=>{ const t = shTrip(SH.open); return t&&t.cur||"EUR"; }},
+    {k:"paidBy",label:"Paid by",type:"select",opts:()=>((shTrip(SH.open)||{}).members||[]).map(m=>[m,m]),def:()=>{ const t = shTrip(SH.open)||{}; return (t.members||[]).find(m=>sameName(m,myName()))||(t.members||[])[0]||""; }},{k:"date",label:"Date",type:"date",def:today},
+    {k:"cat",label:"Category",type:"select",opts:()=>CATS.map(c=>[c,c]),def:"Food"},{k:"split",label:"Split between",type:"multi",full:true,opts:()=>((shTrip(SH.open)||{}).members||[]),def:()=>((shTrip(SH.open)||{}).members||[]).slice()}]},
+  journal:{title:"Journal entry", fields:[{k:"date",label:"Date",type:"date",def:today},{k:"title",label:"Title",type:"text",req:true},{k:"text",label:"What happened",type:"textarea",full:true}]}
+};
+
+/* ---------- sheet (add / edit) ---------- */
+let sheet = null; // {sec, id, preset, confirmDelete}
+function openSheet(sec, id, preset){ sheet = {sec, id:id||null, preset:preset||{}, confirmDelete:false}; renderSheet(); }
+function closeSheet(){ sheet = null; renderSheet(); }
+function renderSheet(){
+  const root = document.getElementById("sheetRoot");
+  if (!sheet){ root.innerHTML = ""; return; }
+  if (sheet.sec === "settings") return renderSettingsSheet(root);
+  const sc = SCHEMA[sheet.sec]; const shared = sheet.sec.startsWith("shared");
+  const pool = !shared ? S[sheet.sec] : sheet.sec==="sharedTrips" ? SH.trips : sheet.sec==="sharedExp" ? (SH.exp[SH.open]||[]) : (SH.plans[SH.open]||[]);
+  const rec = sheet.id ? pool.find(x=>x.id===sheet.id) : null;
+  const val = f => { if (rec && rec[f.k]!==undefined) return Array.isArray(rec[f.k]) && f.type!=="multi" ? rec[f.k].join(", ") : rec[f.k]; if (sheet.preset[f.k]!==undefined) return sheet.preset[f.k]; return typeof f.def==="function"?f.def():(f.def!=null?f.def:""); };
+  const fh = sc.fields.map(f=>{
+    const id = "f_"+f.k, v = val(f), cls = "field"+(f.full||f.type==="textarea"?" full":"")+(f.type==="checkbox"?" cb":"");
+    let input;
+    if (f.type==="select") input = `<select id="${id}">${f.opts().map(([k,l])=>`<option value="${esc(k)}"${String(v)===String(k)?" selected":""}>${esc(l)}</option>`).join("")}</select>`;
+    else if (f.type==="textarea") input = `<textarea id="${id}">${esc(v)}</textarea>`;
+    else if (f.type==="multi") input = `<div class="row" id="${id}">${f.opts().map((m,i)=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" value="${esc(m)}"${(v||[]).includes(m)?" checked":""}>${esc(m)}</label>`).join("")}</div>`;
+    else if (f.type==="checkbox") return `<div class="${cls}"><input type="checkbox" id="${id}"${v?" checked":""}><label for="${id}" style="color:var(--fg)">${esc(f.label)}</label></div>`;
+    else input = `<input id="${id}" type="${f.type}"${f.type==="number"?' step="any" inputmode="decimal"':""} value="${esc(v)}"${f.req?" required":""}${f.upper?' style="text-transform:uppercase"':""}>`;
+    return `<div class="${cls}"><label for="${id}">${esc(f.label)}${f.req?"":' <span style="font-weight:400">(optional)</span>'}</label>${input}${f.hint?`<span class="hint">${esc(f.hint)}</span>`:""}</div>`;
+  }).join("");
+  root.innerHTML = `<div class="scrim" data-act="scrim"><form class="sheet" id="sheetForm" role="dialog" aria-modal="true" aria-label="${esc(sc.title)}">
+    <div class="row between"><h2>${rec?"Edit":"Add"} ${esc(sc.title.toLowerCase())}</h2><button type="button" class="btn ghost" data-act="close">Cancel</button></div>
+    <div class="fields">${fh}</div>
+    <div id="formErr" class="small" style="color:var(--bad)"></div>
+    <div class="row between">${rec?`<button type="button" class="btn danger" data-act="del">${sheet.confirmDelete?"Tap again to delete":"Delete"}</button>`:"<span></span>"}<button class="btn primary" type="submit">Save</button></div>
+  </form></div>`;
+  const first = root.querySelector("input,select,textarea"); if (first && !rec) setTimeout(()=>first.focus(),30);
+  root.querySelector("#sheetForm").addEventListener("submit", ev=>{
+    ev.preventDefault();
+    const out = rec ? Object.assign({},rec) : Object.assign({id:uidGen()}, sheet.preset);
+    for (const f of sc.fields){
+      const el = document.getElementById("f_"+f.k);
+      let v = f.type==="checkbox" ? el.checked : f.type==="multi" ? [...el.querySelectorAll("input:checked")].map(x=>x.value) : el.value.trim();
+      if (f.upper && typeof v==="string") v = v.toUpperCase();
+      if (f.type==="number" && v!=="") v = Number(v);
+      if (f.type==="multi" && !v.length){ document.getElementById("formErr").textContent = "Pick at least one person to split with."; return; }
+      if (f.req && (v===""||v==null)){ document.getElementById("formErr").textContent = f.label+" is needed."; el.focus(); return; }
+      out[f.k] = v;
+    }
+    if ((sheet.sec==="trips"||sheet.sec==="sharedTrips") && out.end < out.start){ document.getElementById("formErr").textContent = "The trip ends before it starts. Check the dates."; return; }
+    if (sheet.sec==="stays" && out.checkout < out.checkin){ document.getElementById("formErr").textContent = "Check-out is before check-in. Check the dates."; return; }
+    if (shared){
+      const sec = sheet.sec;
+      if (sec==="sharedTrips"){ out.members = [...new Set(String(out.members).split(",").map(x=>x.trim()).filter(Boolean))]; if (!rec){ out.createdAt = Date.now(); out.memberUids = [uid]; out.id = db.collection("shared").doc().id; } }
+      const tid = sec==="sharedTrips" ? out.id : SH.open;
+      if (sec==="sharedExp"){ const tr = shTrip(tid); out.tripAmt = Math.round(Number(out.amount)*rate(out.cur)/rate(tr.cur||"EUR")*100)/100; }
+      if (sec==="sharedPlans" && !rec) out.by = myName();
+      closeSheet(); shWrite(sec, tid, out).then(ok=>{ if (ok){ toast(rec?"Saved":"Added"); if (sec==="sharedTrips" && !rec){ SH.open = out.id; SH.seg = "plan"; SH.waitUntil = Date.now()+5000; render(); } } });
+      return;
+    }
+    const list = S[sheet.sec]; const i = list.findIndex(x=>x.id===out.id);
+    if (i>=0) list[i] = out; else list.push(out);
+    const sec = sheet.sec; closeSheet(); save(sec); toast(rec?"Saved":"Added");
+  });
+}
+function renderSettingsSheet(root){
+  const st = S.settings;
+  const rateRows = CURRENCIES.filter(c=>c!=="SGD").map(c=>`<div class="field"><label for="r_${c}">1 ${c} in SGD</label><input id="r_${c}" type="number" step="any" value="${esc(st.rates[c]!=null?st.rates[c]:"")}"></div>`).join("");
+  root.innerHTML = `<div class="scrim" data-act="scrim"><form class="sheet" id="setForm" role="dialog" aria-modal="true" aria-label="Exchange details">
+    <div class="row between"><h2>Exchange details</h2><button type="button" class="btn ghost" data-act="close">Cancel</button></div>
+    <div class="fields">
+      <div class="field"><label for="s_city">City</label><input id="s_city" value="${esc(st.city)}"></div>
+      <div class="field"><label for="s_country">Country</label><input id="s_country" value="${esc(st.country)}"></div>
+      <div class="field full"><label for="s_school">Exchange school</label><input id="s_school" value="${esc(st.school)}"></div>
+      <div class="field full"><label for="s_name">Your name (for shared trips)</label><input id="s_name" value="${esc(st.myName||"")}"></div>
+      <div class="field full"><span class="small" style="font-weight:600;color:var(--muted)">IE 2026–27 semester</span><div class="row">${SEMESTERS.map((x,i)=>`<button type="button" class="chip" data-act="semester" data-i="${i}">${x[0]} · ${fmtD(x[1])} – ${fmtD(x[2])}</button>`).join("")}</div></div>
+      <div class="field"><label for="s_start">Exchange starts</label><input id="s_start" type="date" value="${esc(st.start)}"></div>
+      <div class="field"><label for="s_end">Exchange ends</label><input id="s_end" type="date" value="${esc(st.end)}"></div>
+      <div class="field"><label for="s_home">Home currency</label><select id="s_home">${CURRENCIES.map(c=>`<option${c===st.home?" selected":""}>${c}</option>`).join("")}</select></div>
+      <div class="field"><label for="s_local">Local currency</label><select id="s_local">${CURRENCIES.map(c=>`<option${c===st.local?" selected":""}>${c}</option>`).join("")}</select></div>
+      <div class="field full"><label for="s_budget">Monthly budget (home currency)</label><input id="s_budget" type="number" step="any" value="${esc(st.budget)}"></div>
+    </div>
+    <details><summary class="small" style="cursor:pointer;font-weight:600">Exchange rates</summary>
+      <p class="hint">Approximate rates, set once. Update them when they drift; every expense converts with the rate saved here.</p>
+      <div class="fields">${rateRows}</div></details>
+    <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Save</button></div>
+  </form></div>`;
+  root.querySelector("#setForm").addEventListener("submit", ev=>{
+    ev.preventDefault();
+    const g = id => document.getElementById(id).value.trim();
+    Object.assign(st,{myName:g("s_name"),city:g("s_city"),country:g("s_country"),school:g("s_school"),start:g("s_start"),end:g("s_end"),home:g("s_home"),local:g("s_local"),budget:Number(g("s_budget"))||0});
+    CURRENCIES.filter(c=>c!=="SGD").forEach(c=>{ const v = Number(g("r_"+c)); if (v>0) st.rates[c]=v; });
+    st.rates.SGD = 1;
+    closeSheet(); save("settings"); toast("Saved");
+  });
+}
+
+/* ---------- views ---------- */
+const TABS = [["home","Home",I.home],["money","Money",I.money],["travel","Travel",I.travel],["school","School",I.school],["more","More",I.more]];
+function renderTabs(){
+  document.getElementById("tabs").innerHTML = TABS.map(([k,l,ic])=>`<button data-act="tab" data-k="${k}"${ui.tab===k?' aria-current="page"':""}>${ic}<span>${l}</span></button>`).join("");
+}
+function topBar(title, sub){
+  const st = S.settings;
+  const pill = `<span class="save-pill ok" title="Your data is kept on this device. Shared trips sync with friends.">Saved on this phone</span>`;
+  return `<header class="top" id="topbar"><div class="brand"><div class="brand-mark" aria-hidden="true">${esc((st.local||"EX").slice(0,3))}</div><div><h1 style="font-size:1.35rem">${esc(title)}</h1>${sub?`<div class="small muted">${esc(sub)}</div>`:""}</div></div>${pill}</header>`;
+}
+function renderTop(){ const el = document.getElementById("topbar"); if (el){ const tmp=document.createElement("div"); tmp.innerHTML = topBar(el.querySelector("h1").textContent, (el.querySelector(".small")||{}).textContent); el.replaceWith(tmp.firstElementChild);} }
+
+function examplesBanner(){
+  const nothing = SECTIONS.slice(1).every(k=>!S[k].length);
+  if (S.settings.hasExamples) return `<div class="banner"><span>You're looking at <b>example data</b>. Clear it when you're ready to add your own.</span><button class="btn sm" data-act="clearEx">Clear examples</button></div>`;
+  if (nothing) return `<div class="banner"><span>Nothing here yet. Set your exchange details, or load example data to see how everything works.</span><span class="row"><button class="btn sm" data-act="settings">Set details</button><button class="btn sm primary" data-act="loadEx">Load examples</button></span></div>`;
+  return "";
+}
+
+function viewHome(){
+  const st = S.settings, t = today();
+  let hero;
+  if (st.start && st.end){
+    const total = Math.max(1,daysBetween(st.start,st.end)), into = daysBetween(st.start,t);
+    let head, sub, pct;
+    if (into < 0){ head = `${-into} day${into===-1?"":"s"} to go`; sub = `Exchange starts ${fmtDW(st.start)}`; pct = 0; }
+    else if (into > total){ head = "Exchange complete"; sub = `${fmtD(st.start)} to ${fmtD(st.end)}`; pct = 100; }
+    else { head = `Day ${into+1} of ${total+1}`; sub = `${daysBetween(t,st.end)} days left, ends ${fmtDW(st.end)}`; pct = Math.round(into/total*100); }
+    hero = `<section class="hero"><div class="stampmark" aria-hidden="true">${esc((st.city||"EXCHANGE").toUpperCase().slice(0,12))}<br>${esc(st.start.slice(0,4))}</div>
+      <div class="eyebrow">${esc([st.school, st.city].filter(Boolean).join(" · ")||"Your exchange")}</div><h1>${head}</h1><div>${esc(sub)}</div>
+      <div class="bar" role="img" aria-label="${pct}% of the exchange done"><i style="width:${pct}%"></i></div></section>`;
+  } else {
+    hero = `<section class="hero"><div class="eyebrow">Your exchange</div><h1>Where are you headed?</h1><div>Add your city, school and dates to start the countdown.</div><div><button class="btn" data-act="settings" style="color:var(--fg)">Set exchange details</button></div></section>`;
+  }
+  // today's classes
+  const dIdx = dowIdx(t);
+  const todays = S.classes.filter(c=>Number(c.day)===dIdx).sort((a,b)=>a.start.localeCompare(b.start));
+  const classesH = todays.length ? `<div class="list">${todays.map(classRow).join("")}</div>` : `<div class="empty">No classes today.</div>`;
+  // up next
+  const nowStr = t+"T"+pad(new Date().getHours())+":"+pad(new Date().getMinutes());
+  const next = [];
+  S.flights.filter(f=>f.dep>=nowStr).sort((a,b)=>a.dep.localeCompare(b.dep)).slice(0,1).forEach(f=>next.push({d:f.dep.slice(0,10),h:`<button class="item" data-act="edit" data-sec="flights" data-id="${f.id}"><span class="tag accent">Flight</span><div class="main"><div class="t mono">${esc(f.from)} → ${esc(f.to)}</div><div class="s">${fmtDW(f.dep)} · ${fmtTime(f.dep)} ${esc(f.num||"")}</div></div><div class="r small muted">${rel(f.dep)}</div></button>`}));
+  S.stays.filter(s=>s.checkin>=t).sort((a,b)=>a.checkin.localeCompare(b.checkin)).slice(0,1).forEach(s=>next.push({d:s.checkin,h:`<button class="item" data-act="edit" data-sec="stays" data-id="${s.id}"><span class="tag stamp">Stay</span><div class="main"><div class="t">${esc(s.name)}</div><div class="s">Check in ${fmtDW(s.checkin)}</div></div><div class="r small muted">${rel(s.checkin)}</div></button>`}));
+  S.deadlines.filter(d=>!d.done && d.due>=t).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,3).forEach(d=>next.push({d:d.due,h:deadlineRow(d)}));
+  S.trips.filter(tr=>tr.start>=t).sort((a,b)=>a.start.localeCompare(b.start)).slice(0,1).forEach(tr=>next.push({d:tr.start,h:`<button class="item" data-act="trip" data-id="${tr.id}"><span class="tag">Trip</span><div class="main"><div class="t">${esc(tr.name)}</div><div class="s">${fmtD(tr.start)} – ${fmtD(tr.end)}</div></div><div class="r small muted">${rel(tr.start)}</div></button>`}));
+  IE_CAL.filter(c=>c.d>=t && c.k!=="term").slice(0,1).forEach(c=>next.push({d:c.d,h:`<button class="item" data-act="tab" data-k="school"><span class="tag ${c.k==="hol"?"bad":"accent"}">${c.k==="hol"?"Holiday":"Break"}</span><div class="main"><div class="t">${esc(c.t)}</div><div class="s">${fmtDW(c.d)}${c.e?" – "+fmtDW(c.e):""}</div></div><div class="r small muted">${rel(c.d)}</div></button>`}));
+  next.sort((a,b)=>a.d.localeCompare(b.d));
+  const nextH = next.length ? `<div class="list">${next.map(n=>n.h).join("")}</div>` : `<div class="empty">Nothing coming up. Add a flight, trip or deadline and it shows here.</div>`;
+  // documents expiring
+  const soon = S.wallet.filter(w=>w.expiry && daysBetween(t,w.expiry) <= 60);
+  const warnH = soon.length ? `<div class="banner"><span>${soon.map(w=>`<b>${esc(w.name)}</b> ${daysBetween(t,w.expiry)<0?"expired":"expires "+rel(w.expiry)}`).join(" · ")}</span><button class="btn sm" data-act="more" data-k="wallet">Open wallet</button></div>` : "";
+  return topBar("Exchange Companion", st.city?`${st.city}${st.country?", "+st.country:""}`:"") + examplesBanner() + hero + warnH +
+    `<section class="stack"><div class="sect-head"><h2>Today, ${fmtDW(t)}</h2><button class="btn ghost sm" data-act="tab" data-k="school">Timetable</button></div>${classesH}</section>` +
+    `<section class="stack"><div class="sect-head"><h2>Coming up</h2></div>${nextH}</section>` +
+    `<section class="stack"><div class="sect-head"><h2>This month</h2><button class="btn ghost sm" data-act="tab" data-k="money">Money</button></div>${budgetCard(t.slice(0,7), true)}</section>`;
+}
+function rel(s){ const n = daysBetween(today(), s.slice(0,10)); if (n===0) return "today"; if (n===1) return "tomorrow"; if (n===-1) return "yesterday"; return n>0 ? `in ${n} days` : `${-n} days ago`; }
+
+function monthExpenses(m){ return S.expenses.filter(e=>(e.date||"").slice(0,7)===m); }
+function budgetCard(m, compact){
+  const st = S.settings, ex = monthExpenses(m), shm = sharedMine(m), shSum = shm.reduce((s,x)=>s+x.share,0), spent = ex.reduce((s,e)=>s+myShare(e),0) + shSum, b = Number(st.budget)||0;
+  const pct = b ? Math.min(100, spent/b*100) : 0, over = b && spent > b;
+  const [y,mo] = m.split("-").map(Number); const dim = new Date(y,mo,0).getDate();
+  const isCur = m===today().slice(0,7); const dayN = isCur ? new Date().getDate() : dim;
+  const perDay = b ? (b - spent) / Math.max(1, dim - dayN + (isCur?1:0)) : 0;
+  let cats = "";
+  if (!compact){
+    const by = {}; ex.forEach(e=>{ if (e.settle) return; by[e.cat||"Other"] = (by[e.cat||"Other"]||0) + myShare(e); }); if (shSum) by["Shared trips"] = shSum;
+    const rows = Object.entries(by).sort((a,b)=>b[1]-a[1]); const max = rows.length ? rows[0][1] : 1;
+    cats = rows.length ? `<div class="stack" style="gap:8px;margin-top:6px">${rows.map(([c,v])=>`<div class="cat-row"><span>${esc(c)}</span><div class="meter"><i style="width:${v/max*100}%;background:${CAT_COLORS[c]||"var(--accent)"}"></i></div><span class="num">${money(v,null,0)}</span></div>`).join("")}</div>` : "";
+  }
+  return `<div class="card stack">
+    <div class="row between"><div><div class="eyebrow">Spent${b?" of "+money(b,null,0):""}</div><div class="stat"><span class="v">${money(spent,null,0)}</span></div></div>
+    ${b?`<div style="text-align:right"><div class="eyebrow">${over?"Over by":"Left"}</div><div class="num" style="font-weight:600;color:${over?"var(--bad)":"var(--good)"}">${money(Math.abs(b-spent),null,0)}</div>${isCur&&!over?`<div class="small muted num">${money(perDay,null,0)} a day</div>`:""}</div>`:`<button class="btn sm" data-act="settings">Set a budget</button>`}</div>
+    ${b?`<div class="meter${over?" over":""}" role="img" aria-label="${Math.round(pct)}% of budget used"><i style="width:${pct}%"></i></div>`:""}
+    ${S.settings.home!==S.settings.local?`<div class="small muted num">1 ${esc(S.settings.local)} ≈ ${money(rate(S.settings.local),null,3)} · your share of split bills only</div>`:""}
+    ${cats}</div>`;
+}
+
+function viewMoney(){
+  if (!ui.month) ui.month = today().slice(0,7);
+  const m = ui.month, [y,mo] = m.split("-").map(Number);
+  const label = new Date(y,mo-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  const ex = monthExpenses(m).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  let lastD = null, rows = "";
+  ex.forEach(e=>{
+    if (e.date!==lastD){ rows += `<div class="daygroup">${fmtDW(e.date)}</div>`; lastD = e.date; }
+    const others = splitNames(e.splitWith), home = S.settings.home;
+    const sub = [e.cat, others.length?`split ${others.length+1} ways`:"", !isMe(e.paidBy)?`${e.paidBy} paid`:"", e.cur!==home?money(toHome(e.amount,e.cur),home):""].filter(Boolean).join(" · ");
+    rows += `<button class="item" data-act="edit" data-sec="expenses" data-id="${e.id}"><span class="dot" style="background:${CAT_COLORS[e.cat]||"var(--muted)"}"></span><div class="main"><div class="t">${esc(e.note||e.cat)}</div><div class="s">${esc(sub)}</div></div><div class="r num" style="font-weight:600">${money(e.amount,e.cur)}</div></button>`;
+  });
+  // balances
+  const bal = {}; S.expenses.forEach(e=>{ if (e.settle){ bal[e.person]=(bal[e.person]||0)-Number(e.delta||0); return; } const others = splitNames(e.splitWith); const share = toHome(e.amount,e.cur)/(others.length+1);
+    if (isMe(e.paidBy)) others.forEach(o=>bal[o]=(bal[o]||0)+share);
+    else { const p = e.paidBy.trim(); bal[p]=(bal[p]||0)-share; } });
+  const balRows = Object.entries(bal).filter(([,v])=>Math.abs(v)>0.005).sort((a,b)=>b[1]-a[1]);
+  const balH = balRows.length ? `<div class="list">${balRows.map(([n,v])=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(n)}</div><div class="s">${v>0?"owes you":"you owe"}</div></div><div class="r num" style="font-weight:600;color:${v>0?"var(--good)":"var(--bad)"}">${money(Math.abs(v))}</div><button class="btn sm" data-act="settle" data-n="${esc(n)}" data-v="${v}">Settle</button></div>`).join("")}</div>`
+    : `<div class="empty">All square. Put friends' names in "Split with" on an expense and the app works out who owes who.</div>`;
+  const total = S.expenses.reduce((s,e)=>s+myShare(e),0);
+  const st = S.settings; let avg = "";
+  if (st.start){ const d0 = st.start, d1 = today() < (st.end||today()) ? today() : st.end; const n = Math.max(1, daysBetween(d0,d1)+1); if (daysBetween(d0,today())>=0) avg = ` · ${money(total/n,null,0)} a day on average`; }
+  return topBar("Money", `All amounts in ${S.settings.home} unless shown`) + examplesBanner() +
+    `<div class="row between"><button class="btn sm" data-act="month" data-d="-1" aria-label="Previous month">‹</button><h2>${esc(label)}</h2><button class="btn sm" data-act="month" data-d="1" aria-label="Next month">›</button></div>` +
+    budgetCard(m,false) +
+    `<button class="btn primary" data-act="add" data-sec="expenses">Add expense</button>` +
+    `<section class="stack"><h2>Expenses</h2>${rows?`<div class="list">${rows}</div>`:`<div class="empty">No expenses logged in ${esc(label)}.</div>`}</section>` +
+    `<section class="stack"><h2>Split with friends</h2>${balH}</section>` +
+    `<div class="small muted num">Whole exchange so far: ${money(total,null,0)}${avg}</div>`;
+}
+
+function viewTravel(){
+  const seg = ui.travelSeg;
+  const segH = `<div class="seg" role="group" aria-label="Travel view">${[["trips","My trips"],["friends","With friends"],["flights","Flights"],["stays","Stays"]].map(([k,l])=>`<button data-act="tseg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
+  let body = "";
+  if (seg==="trips") body = ui.openTrip ? tripDetail(ui.openTrip) : tripList();
+  if (seg==="friends") body = friendsView();
+  if (seg==="flights") body = flightList();
+  if (seg==="stays") body = stayList();
+  return topBar("Travel", "Trips, flights and places to stay") + examplesBanner() + segH + body;
+}
+function tripList(){
+  const t = today(); const trips = S.trips.slice().sort((a,b)=>a.start.localeCompare(b.start));
+  const up = trips.filter(x=>x.end>=t), past = trips.filter(x=>x.end<t);
+  const row = tr => { const spent = S.expenses.filter(e=>e.tripId===tr.id).reduce((s,e)=>s+myShare(e),0); const nplans = S.plans.filter(p=>p.tripId===tr.id).length;
+    const live = tr.start<=t && tr.end>=t;
+    return `<button class="item" data-act="trip" data-id="${tr.id}"><div class="main"><div class="t">${esc(tr.name)} ${live?'<span class="tag good">Now</span>':""}</div><div class="s">${esc(tr.dest||"")} · ${fmtD(tr.start)} – ${fmtD(tr.end)} · ${daysBetween(tr.start,tr.end)+1} day${daysBetween(tr.start,tr.end)?"s":""} · ${nplans} plan${nplans===1?"":"s"}</div></div><div class="r small muted num">${spent?money(spent,null,0):""}${tr.budget?`<div>of ${money(tr.budget,null,0)}</div>`:""}</div></button>`; };
+  return `<button class="btn primary" data-act="add" data-sec="trips">Plan a trip</button>
+    <section class="stack"><h2>Upcoming</h2>${up.length?`<div class="list">${up.map(row).join("")}</div>`:`<div class="empty">No trips planned. Weekend in another city? Add it and build a day-by-day plan.</div>`}</section>
+    <section class="stack"><div class="sect-head"><h2>Days off for travel</h2><span class="small muted">IE calendar</span></div>${freeList(6)}</section>
+    ${past.length?`<section class="stack"><h2>Past trips</h2><div class="list">${past.reverse().map(row).join("")}</div></section>`:""}`;
+}
+function tripDetail(id){
+  const tr = S.trips.find(x=>x.id===id); if (!tr){ ui.openTrip=null; return tripList(); }
+  const days = []; for (let d = tr.start; d <= tr.end; d = addDays(d,1)) days.push(d);
+  const plans = S.plans.filter(p=>p.tripId===id);
+  const fl = S.flights.filter(f=>f.dep.slice(0,10)>=tr.start && f.dep.slice(0,10)<=tr.end);
+  const st = S.stays.filter(s=>s.checkin<=tr.end && s.checkout>=tr.start);
+  const spent = S.expenses.filter(e=>e.tripId===id).reduce((s,e)=>s+myShare(e),0);
+  const costs = fl.reduce((s,f)=>s+toHome(f.price,f.cur),0) + st.reduce((s,x)=>s+toHome(x.price,x.cur),0);
+  const dayH = days.map((d,i)=>{
+    const items = [];
+    fl.filter(f=>f.dep.slice(0,10)===d).forEach(f=>items.push({k:fmtTime(f.dep),h:`<button class="item" data-act="edit" data-sec="flights" data-id="${f.id}"><span class="mono small" style="width:44px">${fmtTime(f.dep)}</span><div class="main"><div class="t mono">✈ ${esc(f.from)} → ${esc(f.to)}</div><div class="s">${esc([f.airline,f.num].filter(Boolean).join(" "))}</div></div></button>`}));
+    st.filter(s=>s.checkin===d).forEach(s=>items.push({k:"14:00",h:`<button class="item" data-act="edit" data-sec="stays" data-id="${s.id}"><span class="mono small" style="width:44px">in</span><div class="main"><div class="t">Check in: ${esc(s.name)}</div><div class="s">${esc(s.address||"")}</div></div></button>`}));
+    plans.filter(p=>p.date===d).forEach(p=>items.push({k:p.time||"99",h:`<button class="item" data-act="edit" data-sec="plans" data-id="${p.id}"><span class="mono small" style="width:44px">${esc(p.time||"–")}</span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${esc([p.place,p.note].filter(Boolean).join(" · "))}</div></div></button>`}));
+    items.sort((a,b)=>a.k.localeCompare(b.k));
+    return `<div class="daygroup row between"><span>Day ${i+1} · ${fmtDW(d)}</span><button class="btn ghost sm" data-act="add" data-sec="plans" data-trip="${id}" data-date="${d}">+ Add</button></div>${items.map(x=>x.h).join("")||`<div class="item small muted" style="cursor:default">Free day</div>`}`;
+  }).join("");
+  return `<div class="row between"><button class="btn ghost sm" data-act="trip" data-id="">‹ All trips</button><button class="btn sm" data-act="edit" data-sec="trips" data-id="${id}">Edit trip</button></div>
+    <div class="card stack"><div><div class="eyebrow">${esc(tr.dest||"Trip")}</div><h2 style="font-size:1.5rem">${esc(tr.name)}</h2><div class="muted">${fmtDW(tr.start)} – ${fmtDW(tr.end)}</div></div>
+    <div class="grid2"><div><div class="eyebrow">Booked (flights + stays)</div><div class="num" style="font-weight:600">${money(costs,null,0)}</div></div><div><div class="eyebrow">Spent on the trip</div><div class="num" style="font-weight:600">${money(spent,null,0)}${tr.budget?` <span class="muted small">of ${money(tr.budget,null,0)}</span>`:""}</div></div></div>
+    ${tr.note?`<div class="small">${esc(tr.note)}</div>`:""}</div>
+    <div class="row"><button class="btn sm" data-act="add" data-sec="flights" data-date="${tr.start}">Add flight</button><button class="btn sm" data-act="add" data-sec="stays" data-date="${tr.start}" data-end="${tr.end}">Add stay</button><button class="btn sm" data-act="add" data-sec="expenses" data-trip="${id}">Add expense</button></div>
+    <div class="list tl">${dayH}</div>`;
+}
+function flightList(){
+  const now = today()+"T00:00"; const fl = S.flights.slice().sort((a,b)=>a.dep.localeCompare(b.dep));
+  const up = fl.filter(f=>f.dep>=now), past = fl.filter(f=>f.dep<now);
+  const pass = f => { const tag = f.status==="booked"?'<span class="tag good">Booked</span>':f.status==="watching"?'<span class="tag stamp">Watching price</span>':'<span class="tag">Idea</span>';
+    return `<button class="pass" data-act="edit" data-sec="flights" data-id="${f.id}"><div class="body"><div class="row between"><span class="small muted">${esc([f.airline,f.num].filter(Boolean).join(" ")||"Flight")}</span>${tag}</div>
+      <div class="iata"><span>${esc(f.from)}<small>${fmtTime(f.dep)}</small></span><span class="line"></span><span style="text-align:right">${esc(f.to)}<small>${fmtTime(f.arr)}${f.arr&&f.arr.slice(0,10)!==f.dep.slice(0,10)?" +1":""}</small></span></div>
+      ${f.note?`<div class="small muted">${esc(f.note)}</div>`:""}</div>
+      <div class="stub"><div class="eyebrow">Date</div><div class="mono" style="font-weight:700">${fmtD(f.dep)}</div>${f.ref?`<div class="eyebrow">Ref</div><div class="mono small">${esc(f.ref)}</div>`:""}${f.price?`<div class="small num muted">${money(f.price,f.cur,0)}</div>`:""}</div></button>`; };
+  return `<button class="btn primary" data-act="add" data-sec="flights">Add flight</button>
+    <section class="stack"><h2>Upcoming flights</h2>${up.length?up.map(pass).join(""):`<div class="empty">No upcoming flights. Add booked ones, or ideas you're watching the price on.</div>`}</section>
+    ${past.length?`<section class="stack"><h2>Flown</h2>${past.reverse().map(pass).join("")}</section>`:""}`;
+}
+function stayList(){
+  const t = today(); const st = S.stays.slice().sort((a,b)=>a.checkin.localeCompare(b.checkin));
+  const row = s => { const n = daysBetween(s.checkin,s.checkout); const cur = s.checkin<=t && s.checkout>t;
+    return `<button class="item" data-act="edit" data-sec="stays" data-id="${s.id}"><div class="main"><div class="t">${esc(s.name)} ${cur?'<span class="tag good">Staying now</span>':""}${s.status==="idea"?' <span class="tag">Shortlisted</span>':""}</div><div class="s">${esc(s.kind)} · ${fmtD(s.checkin)} – ${fmtD(s.checkout)} · ${n} night${n===1?"":"s"}${s.address?" · "+esc(s.address):""}</div></div><div class="r num">${s.price?money(s.price,s.cur,0):""}<div class="small">${s.price?(s.paid?'<span class="tag good">Paid</span>':'<span class="tag bad">To pay</span>'):""}</div></div></button>`; };
+  const up = st.filter(s=>s.checkout>=t), past = st.filter(s=>s.checkout<t);
+  return `<button class="btn primary" data-act="add" data-sec="stays">Add accommodation</button>
+    <section class="stack"><h2>Upcoming and current</h2>${up.length?`<div class="list">${up.map(row).join("")}</div>`:`<div class="empty">No stays yet. Add your student housing and any hostels for trips.</div>`}</section>
+    ${past.length?`<section class="stack"><h2>Past</h2><div class="list">${past.reverse().map(row).join("")}</div></section>`:""}`;
+}
+
+function classRow(c){ return `<button class="class" data-act="edit" data-sec="classes" data-id="${c.id}"><div class="time">${esc(c.start)}<br><span class="muted">${esc(c.end)}</span></div><div><div class="code">${esc(c.code||"")} · ${esc(c.kind||"")}</div><div style="font-weight:600">${esc(c.name)}</div><div class="small muted">${esc([c.room,c.prof].filter(Boolean).join(" · "))}</div></div></button>`; }
+function deadlineRow(d){
+  const n = daysBetween(today(), d.due); const urgent = !d.done && n<=3;
+  const tag = d.kind==="Exam"?"bad":(d.kind==="Admin"||d.kind==="Visa / permit")?"stamp":"accent";
+  return `<div class="item${d.done?" done":""}" style="cursor:default"><button class="check${d.done?" on":""}" data-act="toggle" data-sec="deadlines" data-id="${d.id}" aria-label="Mark ${esc(d.title)} ${d.done?"not done":"done"}">${d.done?"✓":""}</button>
+    <button class="main" data-act="edit" data-sec="deadlines" data-id="${d.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(d.title)}</div><div class="s"><span class="tag ${tag}">${esc(d.kind)}</span> ${esc(d.course||"")} · ${fmtDW(d.due)}</div></button>
+    <div class="r small" style="color:${urgent?"var(--bad)":"var(--muted)"};font-weight:${urgent?600:400}">${d.done?"done":rel(d.due)}</div></div>`;
+}
+function viewSchool(){
+  if (ui.schoolDay==null){ const d = dowIdx(today()); ui.schoolDay = d; }
+  const day = ui.schoolDay;
+  const chips = DAYS.map((d,i)=>{ const n = S.classes.filter(c=>Number(c.day)===i).length; return `<button class="chip" data-act="day" data-i="${i}" aria-pressed="${day===i}">${d}${n?` <span class="muted">${n}</span>`:""}</button>`; }).join("");
+  const cls = S.classes.filter(c=>Number(c.day)===day).sort((a,b)=>a.start.localeCompare(b.start));
+  const week = S.classes.length ? `<div class="card" style="overflow-x:auto"><div class="week">${DAYS.slice(0,5).map((d,i)=>`<div class="col"><div class="dh">${d}</div>${S.classes.filter(c=>Number(c.day)===i).sort((a,b)=>a.start.localeCompare(b.start)).map(c=>`<button class="blk" data-act="edit" data-sec="classes" data-id="${c.id}"><b>${esc(c.code||c.name.slice(0,6))}</b>${esc(c.start)}${c.room?"<br>"+esc(c.room):""}</button>`).join("")}</div>`).join("")}</div></div>` : "";
+  const t = today();
+  const open = S.deadlines.filter(d=>!d.done).sort((a,b)=>a.due.localeCompare(b.due));
+  const done = S.deadlines.filter(d=>d.done).sort((a,b)=>b.due.localeCompare(a.due));
+  const ects = S.classes.reduce((m,c)=>{ if (c.code && c.ects) m[c.code]=Number(c.ects); return m; },{}); const totalEcts = Object.values(ects).reduce((a,b)=>a+b,0);
+  const st = S.settings;
+  return topBar("School", st.school||"Timetable and deadlines") + examplesBanner() +
+    `<div class="chips" role="group" aria-label="Day">${chips}</div>` +
+    `<section class="stack"><div class="sect-head"><h2>${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][day]}</h2><button class="btn ghost sm" data-act="add" data-sec="classes" data-day="${day}">+ Add class</button></div>${cls.length?`<div class="list">${cls.map(classRow).join("")}</div>`:`<div class="empty">No classes on this day.</div>`}</section>` +
+    (week?`<section class="stack"><div class="sect-head"><h2>Week at a glance</h2>${totalEcts?`<span class="small muted num">${totalEcts} ECTS</span>`:""}</div>${week}</section>`:"") +
+    `<section class="stack"><div class="sect-head"><h2>IE calendar 2026–27</h2></div>${(()=>{ const up = IE_CAL.filter(c=>(c.e||c.d)>=today()); const past = IE_CAL.filter(c=>(c.e||c.d)<today());
+      return (up.length?`<div class="list">${up.slice(0,5).map(calRow).join("")}</div>`:"") + (up.length>5?`<details><summary class="small muted" style="cursor:pointer">${up.length-5} more dates</summary><div class="list" style="margin-top:8px">${up.slice(5).map(calRow).join("")}</div></details>`:"") + (past.length?`<details><summary class="small muted" style="cursor:pointer">${past.length} past dates</summary><div class="list" style="margin-top:8px">${past.map(calRow).join("")}</div></details>`:""); })()}<div class="hint">From IE's published calendar, which says dates may change. Segovia-only holidays are left out.</div></section>` +
+    `<section class="stack"><div class="sect-head"><h2>Deadlines</h2><button class="btn ghost sm" data-act="add" data-sec="deadlines">+ Add</button></div>
+      <div class="hint">Assignments, exams, and admin like your TIE, empadronamiento or course registration.</div>${S.deadlines.some(x=>x.spain)?"":`<button class="btn sm" data-act="spainAdmin" style="align-self:flex-start">Add Spain arrival checklist</button>`}
+      ${open.length?`<div class="list">${open.map(deadlineRow).join("")}</div>`:`<div class="empty">Nothing due. Nice.</div>`}
+      ${done.length?`<details><summary class="small muted" style="cursor:pointer">${done.length} done</summary><div class="list" style="margin-top:8px">${done.map(deadlineRow).join("")}</div></details>`:""}</section>`;
+}
+
+const MORE = [
+  ["wallet","Document wallet",I.wallet,"Passport, visa, insurance, IDs"],
+  ["packing","Packing lists",I.pack,"Departure, weekend trips, going home"],
+  ["contacts","Emergency info",I.sos,"Embassy, insurance, local numbers"],
+  ["places","Saved places",I.pin,"Food, study spots, sights"],
+  ["journal","Journal",I.book,"Notes on what you got up to"],
+  ["settings","Settings & backup",I.gear,"Dates, currencies, rates, export"]
+];
+function viewMore(){
+  if (!ui.more) return topBar("More", "") + examplesBanner() + `<div class="more-grid">${MORE.map(([k,l,ic,s])=>`<button class="tile" data-act="more" data-k="${k}">${ic}<b>${l}</b><span class="s">${s}</span></button>`).join("")}</div>`;
+  const back = `<button class="btn ghost sm" data-act="more" data-k="" style="align-self:flex-start">‹ More</button>`;
+  const k = ui.more, meta = MORE.find(x=>x[0]===k);
+  if (k==="settings") return back + topBar("Settings & backup","") + settingsView();
+  let body = "";
+  if (k==="wallet"){
+    const t = today();
+    body = `<div class="hint">Keep numbers and expiry dates here; keep scans of the actual documents somewhere encrypted.</div>` + (S.wallet.length?`<div class="list">${S.wallet.slice().sort((a,b)=>(a.expiry||"9").localeCompare(b.expiry||"9")).map(w=>{ const n = w.expiry?daysBetween(t,w.expiry):null;
+      const tag = n==null?"":n<0?'<span class="tag bad">Expired</span>':n<=60?`<span class="tag stamp">Expires ${rel(w.expiry)}</span>`:`<span class="tag">Valid to ${fmtD(w.expiry,{month:"short",year:"numeric"})}</span>`;
+      return `<button class="item" data-act="edit" data-sec="wallet" data-id="${w.id}"><div class="main"><div class="t">${esc(w.name)}</div><div class="s mono">${esc(w.number||"")}</div>${w.note?`<div class="s">${esc(w.note)}</div>`:""}</div><div class="r">${tag}</div></button>`; }).join("")}</div>`:`<div class="empty">Add your passport, visa, travel insurance and student ID so the numbers and expiry dates are in one place.</div>`);
+  }
+  if (k==="packing"){
+    const lists = ["Before departure","Weekend trip","Going home"];
+    body = lists.map(l=>{ const its = S.packing.filter(p=>(p.list||lists[0])===l); if (!its.length) return ""; const d = its.filter(p=>p.done).length;
+      return `<section class="stack"><div class="sect-head"><h3>${l}</h3><span class="small muted num">${d}/${its.length} packed</span></div><div class="list">${its.map(p=>`<div class="item${p.done?" done":""}" style="cursor:default"><button class="check${p.done?" on":""}" data-act="toggle" data-sec="packing" data-id="${p.id}" aria-label="Mark ${esc(p.text)} ${p.done?"unpacked":"packed"}">${p.done?"✓":""}</button><button class="main" data-act="edit" data-sec="packing" data-id="${p.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(p.text)}</div></button></div>`).join("")}</div>${d?`<button class="btn ghost sm" data-act="unpack" data-l="${l}" style="align-self:flex-start">Uncheck all</button>`:""}</section>`; }).join("") || `<div class="empty">No packing lists yet.</div>`;
+    if (!S.packing.length) body += `<button class="btn" data-act="packStarter">Add a starter list</button>`;
+  }
+  if (k==="contacts"){
+    body = `<div class="banner"><span>Emergency number in Spain and across the EU: <b class="mono">112</b>. Check the local number before trips outside the EU.</span></div>` + (S.contacts.length?`<div class="list">${S.contacts.map(c=>`<div class="item" style="cursor:default"><button class="main" data-act="edit" data-sec="contacts" data-id="${c.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(c.label)}</div><div class="s mono">${esc(c.value)}</div>${c.note?`<div class="s">${esc(c.note)}</div>`:""}</button><button class="btn sm" data-act="copy" data-v="${esc(c.value)}">Copy</button></div>`).join("")}</div>`:`<div class="empty">Add your embassy, insurance hotline, school's international office and someone at home.</div><button class="btn" data-act="sosStarter">Add Spain emergency numbers</button>`);
+  }
+  if (k==="places"){
+    body = S.places.length?`<div class="list">${S.places.map(p=>`<div class="item" style="cursor:default"><button class="main" data-act="edit" data-sec="places" data-id="${p.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(p.name)} ${p.visited?'<span class="tag good">Been</span>':""}</div><div class="s">${esc([p.kind,p.city,p.note].filter(Boolean).join(" · "))}</div></button><a class="btn sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.name,p.city].filter(Boolean).join(" "))}" target="_blank" rel="noopener">Map</a></div>`).join("")}</div>`:`<div class="empty">Save places people recommend so you don't lose them in a group chat.</div>`;
+  }
+  if (k==="journal"){
+    body = S.journal.length?`<div class="stack">${S.journal.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(j=>`<button class="card" data-act="edit" data-sec="journal" data-id="${j.id}" style="text-align:left;cursor:pointer"><div class="eyebrow">${fmtDW(j.date)}</div><h3>${esc(j.title)}</h3><div class="small" style="white-space:pre-wrap;margin-top:4px">${esc(j.text||"")}</div></button>`).join("")}</div>`:`<div class="empty">A few lines a week is enough. You'll be glad you did.</div>`;
+  }
+  return back + topBar(meta[1], meta[3]) + `<button class="btn primary" data-act="add" data-sec="${k}">Add</button>` + body;
+}
+function settingsView(){
+  const st = S.settings;
+  return `<div class="card stack"><div class="row between"><div><div class="eyebrow">Exchange</div><div style="font-weight:600">${esc([st.school,st.city,st.country].filter(Boolean).join(", ")||"Not set")}</div><div class="small muted">${st.start?fmtD(st.start,{day:"numeric",month:"short",year:"numeric"})+" – "+fmtD(st.end,{day:"numeric",month:"short",year:"numeric"}):"No dates yet"}</div></div><button class="btn sm" data-act="settings">Edit</button></div>
+    <div class="small muted num">Home ${esc(st.home)} · Local ${esc(st.local)} · Budget ${money(st.budget,null,0)} a month</div></div>
+    <div class="card stack"><h3>Where your data lives</h3><div class="small">Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them.</div>
+    <div class="row"><button class="btn sm" data-act="export">Export backup</button><button class="btn sm" data-act="import">Import backup</button></div><div class="hint" id="ioMsg"></div></div>
+    <div class="card stack"><h3>Start over</h3><div class="small muted">Removes every expense, trip, class and note.</div><div><button class="btn sm danger" data-act="wipe">${ui.wipeArm?"Tap again to erase everything":"Erase all data"}</button></div></div>`;
+}
+
+/* ---------- examples ---------- */
+function loadExamples(){
+  const t = today(), d = n => addDays(t,n), mon = addDays(t, -dowIdx(t));
+  const s = S; const id = uidGen;
+  Object.assign(s.settings,{city:"Madrid",country:"Spain",school:"IE University",start:addDays(t,-40),end:addDays(t,110),local:"EUR",budget:1800,hasExamples:true});
+  const tripA = id(), tripB = id(), tripC = id();
+  s.trips = [{id:tripA,name:"Barcelona weekend",dest:"Barcelona",start:d(9),end:d(11),budget:350,note:"AVE train is about 2.5 h; compare with flights."},{id:tripB,name:"Toledo day trip",dest:"Toledo",start:d(-12),end:d(-12),budget:60},{id:tripC,name:"Lisbon over the long weekend",dest:"Lisbon, Portugal",start:d(30),end:d(33),budget:450}];
+  s.plans = [{id:id(),tripId:tripA,date:d(9),time:"18:00",title:"Check in, walk the Gothic Quarter",place:"Barri Gòtic"},{id:id(),tripId:tripA,date:d(10),time:"10:00",title:"Sagrada Família",place:"Book tickets ahead"},{id:id(),tripId:tripA,date:d(10),time:"20:30",title:"Tapas with the exchange group",place:"El Born"},{id:id(),tripId:tripC,date:d(31),time:"11:00",title:"Belém and pastéis",place:"Belém"}];
+  s.flights = [{id:id(),from:"MAD",to:"BCN",dep:d(9)+"T15:10",arr:d(9)+"T16:25",airline:"Vueling",num:"VY 1003",ref:"XK7P2M",status:"booked",price:39,cur:"EUR",note:"Cabin bag only"},{id:id(),from:"BCN",to:"MAD",dep:d(11)+"T20:40",arr:d(11)+"T21:55",airline:"Iberia Express",num:"I2 3725",ref:"IB4QT9",status:"booked",price:52,cur:"EUR"},{id:id(),from:"MAD",to:"LIS",dep:d(30)+"T08:05",arr:d(30)+"T08:25",airline:"TAP",num:"",status:"watching",price:70,cur:"EUR",note:"Fares change often, check again"},{id:id(),from:"MAD",to:"SIN",dep:addDays(t,111)+"T12:00",arr:addDays(t,112)+"T09:00",airline:"",num:"",status:"idea",price:900,cur:"SGD",note:"Going home"}];
+  s.stays = [{id:id(),name:"Student flat in Chamberí",kind:"Student housing",status:"booked",checkin:addDays(t,-41),checkout:addDays(t,110),address:"Example address, Madrid",price:3250,cur:"EUR",paid:false,note:"Rent paid monthly"},{id:id(),name:"Hostel near Plaça Catalunya",kind:"Hostel",status:"booked",checkin:d(9),checkout:d(11),address:"Barcelona",ref:"HW-55120",price:64,cur:"EUR",paid:true},{id:id(),name:"Alfama guesthouse",kind:"Airbnb",status:"idea",checkin:d(30),checkout:d(33),address:"Lisbon",price:180,cur:"EUR",paid:false}];
+  s.classes = [{id:id(),code:"BUS2201",name:"Strategic Management",day:"0",kind:"Lecture",start:"10:00",end:"11:20",room:"IE Tower 12.03",ects:6},{id:id(),code:"BUS2201",name:"Strategic Management",day:"2",kind:"Lecture",start:"10:00",end:"11:20",room:"IE Tower 12.03",ects:6},{id:id(),code:"SPA101",name:"Spanish for beginners",day:"1",kind:"Seminar",start:"16:30",end:"18:00",room:"María de Molina",ects:3},{id:id(),code:"MKT3300",name:"Digital Marketing",day:"3",kind:"Lecture",start:"11:40",end:"13:00",room:"IE Tower 18.01",ects:6},{id:id(),code:"FIN2100",name:"Corporate Finance",day:"4",kind:"Lecture",start:"13:20",end:"14:40",room:"IE Tower 9.05",ects:6}];
+  s.deadlines = [{id:id(),title:"Case study write-up",kind:"Assignment",course:"BUS2201",due:d(2),done:false},{id:id(),title:"Group presentation",kind:"Assignment",course:"MKT3300",due:d(16),done:false},{id:id(),title:"TIE fingerprint appointment",kind:"Visa / permit",due:d(5),done:false},{id:id(),title:"Corporate Finance final",kind:"Exam",course:"FIN2100",due:d(70),done:false},{id:id(),title:"Register address (empadronamiento)",kind:"Admin",due:d(-30),done:true}];
+  const cats = [["Groceries","Mercadona",38,"EUR",""],["Food","Menú del día",13.5,"EUR",""],["Transport","Monthly transport pass",20,"EUR",""],["Fun","Real Madrid tickets",180,"EUR","Ana, Lucas"],["Food","Churros at San Ginés",6,"EUR",""],["Phone & bills","SIM top-up",15,"EUR",""],["Groceries","Lidl",42,"EUR",""],["School","Textbook",35,"EUR",""],["Food","Tapas night",96,"EUR","Ana, Lucas, Mei"]];
+  s.expenses = cats.map((c,i)=>({id:id(),date:d(-(i*2)),cat:c[0],note:c[1],amount:c[2],cur:c[3],splitWith:c[4],paidBy:i===3?"Ana":"me",tripId:""}));
+  s.expenses.push({id:id(),date:d(-30),cat:"Rent",note:"Last month's rent",amount:650,cur:"EUR",paidBy:"me",splitWith:"",tripId:""});
+  s.expenses.push({id:id(),date:d(-12),cat:"Travel",note:"Train + cathedral",amount:28,cur:"EUR",paidBy:"me",splitWith:"",tripId:tripB});
+  s.wallet = [{id:id(),name:"Passport",number:"K1234567X",expiry:addDays(t,900),note:"Original in the flat"},{id:id(),name:"Student visa",number:"Example only",expiry:addDays(t,140)},{id:id(),name:"NIE / TIE card",number:"Y0000000X",expiry:addDays(t,120)},{id:id(),name:"Travel insurance",number:"POL-000123",expiry:addDays(t,45),note:"24h hotline in Emergency info"},{id:id(),name:"IE student ID",number:"S-998877",expiry:addDays(t,120)}];
+  s.packing = [["Passport + visa","Before departure",true],["Plug adapter (Type C/F)","Before departure",true],["Light jacket","Before departure",false],["Insurance details","Before departure",true],["Toothbrush","Weekend trip",false],["Power bank","Weekend trip",false],["Deregister address","Going home",false]].map(([text,list,done])=>({id:id(),text,list,done}));
+  s.contacts = EMERGENCY_STARTER.map(([label,value,note])=>({id:id(),label,value,note}));
+  s.places = [{id:id(),name:"Mercado de San Miguel",kind:"Food",city:"Madrid",visited:true,note:"Pricey but fun"},{id:id(),name:"Biblioteca Nacional",kind:"Study spot",city:"Madrid",visited:false},{id:id(),name:"Templo de Debod at sunset",kind:"Sight",city:"Madrid",visited:false},{id:id(),name:"Retiro Park",kind:"Sight",city:"Madrid",visited:true}];
+  s.journal = [{id:id(),date:d(-12),title:"Toledo in a day",text:"Early train, got lost in the old town, best marzipan of my life."}];
+  save(...SECTIONS); toast("Example data loaded");
+}
+function clearAll(){ const keepSettings = !S.settings.hasExamples; const st = S.settings; S = blank(); if (keepSettings) S.settings = st; ui.openTrip=null; ui.more=null; save(...SECTIONS); }
+const SPAIN_ADMIN = [["Get your NIE and book the TIE fingerprint appointment (cita previa)","Visa / permit",14],["Register your address (empadronamiento)","Admin",21],["Get the youth transport pass (Abono Joven)","Admin",10],["Get a Spanish SIM","Admin",3],["Confirm course registration with IE","Admin",7],["Check visa / TIE expiry before travelling outside Schengen","Visa / permit",30]];
+const EMERGENCY_STARTER = [["Emergency (EU-wide)","112","Ambulance, fire, police"],["Policía Nacional","091","Report theft or lost passport"],["Your embassy in Madrid","Add number","Look up your country's embassy or consulate"],["Travel insurance 24h hotline","Add number",""],["IE University international office","Add contact",""]];
+const STARTER = [["Passport","Before departure"],["Visa / residence permit papers","Before departure"],["Admission letter","Before departure"],["Travel insurance details","Before departure"],["Plug adapter (Type C/F)","Before departure"],["Prescriptions + meds","Before departure"],["Bank card + backup card","Before departure"],["Phone charger + power bank","Weekend trip"],["ID","Weekend trip"],["Toiletries","Weekend trip"],["Deregister address","Going home"],["Close local bank account","Going home"],["Transcript request","Going home"]];
+
+/* ---------- export / import ---------- */
+async function exportData(){
+  const json = JSON.stringify({app:"exchange-companion",version:1,exportedAt:new Date().toISOString(),data:S},null,2);
+  const name = "exchange-backup-"+today()+".json", msg = document.getElementById("ioMsg");
+  try {
+    const file = new File([json], name, {type:"application/json"});
+    if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"Exchange backup"}); if (msg) msg.textContent = "Backup shared."; return; }
+  } catch(e){ if (e && e.name==="AbortError") return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([json],{type:"application/json"})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000); if (msg) msg.textContent = "Backup downloaded.";
+}
+document.getElementById("importFile").addEventListener("change", ev=>{
+  const f = ev.target.files[0]; if (!f) return; const r = new FileReader();
+  r.onload = () => { try { const j = JSON.parse(r.result); if (!j || !j.data || !j.data.settings) throw 0; S = blank(); merge(j.data); save(...SECTIONS); toast("Backup imported"); } catch(e){ const m = document.getElementById("ioMsg"); if (m) m.textContent = "That file isn't an Exchange Companion backup."; } ev.target.value = ""; };
+  r.readAsText(f);
+});
+
+/* ---------- IE University 2026–27 academic calendar (Madrid campus) ---------- */
+const IE_CAL = [
+  {d:"2026-08-31",t:"Start of classes",k:"term"},
+  {d:"2026-10-12",t:"Spanish holiday",k:"hol"},
+  {d:"2026-11-02",t:"Spanish holiday",k:"hol"},
+  {d:"2026-11-09",t:"Madrid holiday",k:"hol"},
+  {d:"2026-12-07",t:"Spanish holiday",k:"hol"},
+  {d:"2026-12-08",t:"Spanish holiday",k:"hol"},
+  {d:"2026-12-18",t:"End of classes",k:"term"},
+  {d:"2026-12-19",e:"2027-01-10",t:"Winter break",k:"break"},
+  {d:"2026-12-25",t:"Spanish holiday",k:"hol"},
+  {d:"2027-01-01",t:"Spanish holiday",k:"hol"},
+  {d:"2027-01-06",t:"Spanish holiday",k:"hol"},
+  {d:"2027-01-11",t:"Start of classes",k:"term"},
+  {d:"2027-03-19",t:"End of classes",k:"term"},
+  {d:"2027-03-20",e:"2027-03-29",t:"Spring break",k:"break"},
+  {d:"2027-03-25",t:"Spanish holiday",k:"hol"},
+  {d:"2027-03-26",t:"Spanish holiday",k:"hol"},
+  {d:"2027-03-30",t:"Start of classes",k:"term"},
+  {d:"2027-05-01",t:"Spanish holiday",k:"hol"},
+  {d:"2027-05-03",t:"Madrid holiday",k:"hol"},
+  {d:"2027-05-07",t:"End of classes (3rd to 5th year)",k:"term"},
+  {d:"2027-05-15",t:"Madrid holiday",k:"hol"},
+  {d:"2027-05-21",t:"End of classes (1st and 2nd year)",k:"term"},
+  {d:"2027-05-28",t:"End of classes (BAS)",k:"term"},
+  {d:"2027-05-31",e:"2027-06-30",t:"Retake period",k:"exam"}
+];
+const SEMESTERS = [["Fall","2026-08-31","2026-12-18"],["Spring","2027-01-11","2027-05-28"],["Full year","2026-08-31","2027-05-28"]];
+// Free stretches for travel: breaks, and holidays joined to weekends (3+ days off in a row).
+function freeBlocks(){
+  const off = new Set(); const inBreak = new Set();
+  IE_CAL.filter(c=>c.k==="break").forEach(c=>{ for (let x=c.d; x<=c.e; x=addDays(x,1)){ off.add(x); inBreak.add(x); } });
+  IE_CAL.filter(c=>c.k==="hol").forEach(c=>off.add(c.d));
+  const isOff = x => off.has(x) || dowIdx(x)>=5;
+  const seen = new Set(), out = [];
+  const seeds = IE_CAL.filter(c=>c.k==="hol"||c.k==="break").map(c=>c.d);
+  seeds.forEach(s=>{ if (seen.has(s)) return; let a = s, b = s;
+    while (isOff(addDays(a,-1))) a = addDays(a,-1);
+    while (isOff(addDays(b,1))) b = addDays(b,1);
+    for (let x=a; x<=b; x=addDays(x,1)) seen.add(x);
+    const n = daysBetween(a,b)+1; if (n<3) return;
+    const brk = IE_CAL.find(c=>c.k==="break" && c.d<=b && c.e>=a);
+    const hols = IE_CAL.filter(c=>c.k==="hol" && c.d>=a && c.d<=b);
+    out.push({a,b,n,label: brk ? brk.t : (n>=4?"Long weekend (bridge)":"Long weekend"), why: brk?"":hols.map(h=>h.t+" "+fmtD(h.d)).join(", ")});
+  });
+  return out.sort((x,y)=>x.a.localeCompare(y.a));
+}
+function calRow(c){
+  const tag = c.k==="hol"?'<span class="tag bad">Holiday</span>':c.k==="break"?'<span class="tag accent">Break</span>':c.k==="exam"?'<span class="tag stamp">Retakes</span>':'<span class="tag">Classes</span>';
+  return `<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(c.t)}</div><div class="s">${fmtDW(c.d)}${c.e?" – "+fmtDW(c.e):""}</div></div><div class="r">${tag}<div class="small muted">${c.d>=today()?rel(c.d):""}</div></div></div>`;
+}
+function freeList(limit){
+  const t = today(); const bl = freeBlocks().filter(b=>b.b>=t).slice(0,limit||99);
+  if (!bl.length) return `<div class="empty">No more holidays or breaks in the IE calendar.</div>`;
+  return `<div class="list">${bl.map(b=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(b.label)} <span class="tag good">${b.n} days off</span></div><div class="s">${fmtDW(b.a)} – ${fmtDW(b.b)}${b.why?" · "+esc(b.why):""}</div></div><button class="btn sm" data-act="add" data-sec="trips" data-date="${b.a}" data-end="${b.b}">Plan trip</button></div>`).join("")}</div>`;
+}
+
+/* ---------- shared trips (visible to everyone the page is shared with) ---------- */
+const SH = {status:"off", trips:[], exp:{}, plans:{}, subs:{}, open:null, seg:"plan", canWrite:true};
+function startShared(){
+  SH.status = "loading";
+  try {
+    db.collection("shared").where("memberUids","array-contains",uid).onSnapshot(snap=>{
+      SH.trips = snap.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id}));
+      const ids = new Set(SH.trips.map(t=>t.id));
+      SH.trips.forEach(t=>{ if (SH.subs[t.id]) return; const ref = db.collection("shared").doc(t.id);
+        SH.subs[t.id] = [
+          ref.collection("expenses").onSnapshot(s=>{ SH.exp[t.id] = s.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id})); render(); }, ()=>{}),
+          ref.collection("plans").onSnapshot(s=>{ SH.plans[t.id] = s.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id})); render(); }, ()=>{})
+        ]; });
+      Object.keys(SH.subs).forEach(id=>{ if (!ids.has(id)){ SH.subs[id].forEach(u=>u()); delete SH.subs[id]; delete SH.exp[id]; delete SH.plans[id]; } });
+      SH.status = "ready"; render();
+    }, e=>{ SH.status = "error"; SH.err = e && e.code; render(); });
+  } catch(e){ SH.status = "error"; render(); }
+}
+const myName = () => (S.settings.myName||"").trim();
+const sameName = (a,b) => String(a||"").trim().toLowerCase() === String(b||"").trim().toLowerCase();
+function shTrip(id){ return SH.trips.find(t=>t.id===id); }
+// Net balance per member in the trip's currency: positive = is owed money.
+function shBalances(tid){
+  const bal = {}; const tr = shTrip(tid); (tr.members||[]).forEach(m=>bal[m]=0);
+  (SH.exp[tid]||[]).forEach(e=>{
+    const amt = Number(e.tripAmt)||0;
+    if (e.transfer){ bal[e.from]=(bal[e.from]||0)+amt; bal[e.to]=(bal[e.to]||0)-amt; return; }
+    const sp = (e.split&&e.split.length)?e.split:(tr.members||[]);
+    bal[e.paidBy]=(bal[e.paidBy]||0)+amt; sp.forEach(m=>bal[m]=(bal[m]||0)-amt/sp.length);
+  });
+  return bal;
+}
+function shSettle(bal){
+  const cr = Object.entries(bal).filter(([,v])=>v>0.005).map(([n,v])=>({n,v})).sort((a,b)=>b.v-a.v);
+  const db_ = Object.entries(bal).filter(([,v])=>v<-0.005).map(([n,v])=>({n,v:-v})).sort((a,b)=>b.v-a.v);
+  const out = []; let i=0,j=0;
+  while (i<db_.length && j<cr.length){ const x = Math.min(db_[i].v, cr[j].v); out.push({from:db_[i].n,to:cr[j].n,amt:x}); db_[i].v-=x; cr[j].v-=x; if (db_[i].v<0.005) i++; if (cr[j].v<0.005) j++; }
+  return out;
+}
+// My share of shared-trip spending, in home currency, for the personal budget.
+function sharedMine(month){
+  const me = myName(); if (!me) return [];
+  const out = [];
+  SH.trips.forEach(tr=>{ (SH.exp[tr.id]||[]).forEach(e=>{ if (e.transfer || (month && (e.date||"").slice(0,7)!==month)) return;
+    const sp = (e.split&&e.split.length)?e.split:(tr.members||[]); if (!sp.some(m=>sameName(m,me))) return;
+    out.push({date:e.date, share:(Number(e.tripAmt)||0)/sp.length*rate(tr.cur||"EUR")}); }); });
+  return out;
+}
+function friendsView(){
+  if (SH.status==="unconfigured") return `<div class="card stack"><h3>Sharing isn't switched on yet</h3><div class="small">Shared trips need a free online database. The setup steps are in the README that comes with the app.</div></div>`;
+  if (SH.status==="offline") return `<div class="empty">You're offline, so shared trips can't load. Everything else still works.</div>`;
+  if (SH.status!=="ready") return SH.status==="error" ? `<div class="empty">Shared trips couldn't load. Reload the page to try again.</div>` : `<div class="empty">Loading shared trips…</div>`;
+  if (SH.open && shTrip(SH.open)) return sharedDetail(SH.open);
+  if (SH.open && SH.waitUntil > Date.now()) return `<div class="empty">Creating the trip…</div>`;
+  SH.open = null;
+  const t = today(); const trips = SH.trips.slice().sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+  const row = tr => { const me = myName(); const bal = me ? shBalances(tr.id)[(tr.members||[]).find(m=>sameName(m,me))] : null; const n = (SH.exp[tr.id]||[]).filter(e=>!e.transfer).length;
+    return `<button class="item" data-act="shOpen" data-id="${tr.id}"><div class="main"><div class="t">${esc(tr.name)}</div><div class="s">${esc(tr.dest||"")} · ${fmtD(tr.start)} – ${fmtD(tr.end)} · ${(tr.members||[]).map(esc).join(", ")}</div></div><div class="r small num">${bal!=null&&Math.abs(bal)>0.005?`<span style="color:${bal>0?"var(--good)":"var(--bad)"}">${bal>0?"owed ":"you owe "}${money(Math.abs(bal),tr.cur)}</span>`:`<span class="muted">${n} expense${n===1?"":"s"}</span>`}</div></button>`; };
+  const up = trips.filter(x=>(x.end||"")>=t), past = trips.filter(x=>(x.end||"")<t);
+  return `${myName()?"":`<div class="banner"><span>Set the name your friends know you by so the app can tell which share is yours.</span><button class="btn sm" data-act="settings">Set my name</button></div>`}
+    <button class="btn primary" data-act="add" data-sec="sharedTrips">Start a shared trip</button>
+    <section class="stack"><h2>Shared trips</h2>${up.length?`<div class="list">${up.map(row).join("")}</div>`:`<div class="empty">No shared trips yet. Start one, add your friends' names, and everyone can add plans and expenses.</div>`}</section>
+    ${past.length?`<section class="stack"><h2>Past</h2><div class="list">${past.reverse().map(row).join("")}</div></section>`:""}
+    <details class="card"><summary style="cursor:pointer;font-weight:600">How to add friends</summary><div class="small stack" style="margin-top:8px">
+      <div>Open a trip and tap <b>Invite friends</b>. Send the link however you like. When a friend opens it on any phone, iPhone or Android, they join the trip. No account or app store needed.</div>
+      <div>Friends only see the trips they're invited to. Your budget, documents, timetable and notes never leave your phone.</div>
+      <div class="muted">Anyone with the invite link can join, so send it only to the people going.</div></div></details>`;
+}
+function sharedDetail(id){
+  const tr = shTrip(id), cur = tr.cur||"EUR", me = myName(), members = tr.members||[];
+  const exp = (SH.exp[id]||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const total = exp.filter(e=>!e.transfer).reduce((s,e)=>s+(Number(e.tripAmt)||0),0);
+  const seg = SH.seg;
+  const segH = `<div class="seg" role="group" aria-label="Shared trip view">${[["plan","Plan"],["exp","Expenses"],["bal","Who owes who"]].map(([k,l])=>`<button data-act="shSeg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
+  let body = "";
+  if (seg==="plan"){
+    const days = []; if (tr.start && tr.end) for (let d=tr.start; d<=tr.end && days.length<60; d=addDays(d,1)) days.push(d);
+    const plans = SH.plans[id]||[];
+    body = `<div class="list tl">${days.map((d,i)=>{ const its = plans.filter(p=>p.date===d).sort((a,b)=>(a.time||"99").localeCompare(b.time||"99"));
+      return `<div class="daygroup row between"><span>Day ${i+1} · ${fmtDW(d)}</span><button class="btn ghost sm" data-act="add" data-sec="sharedPlans" data-date="${d}">+ Add</button></div>${its.map(p=>`<button class="item" data-act="shEdit" data-sec="sharedPlans" data-id="${p.id}"><span class="mono small" style="width:44px">${esc(p.time||"–")}</span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${esc([p.place,p.note,p.by?"added by "+p.by:""].filter(Boolean).join(" · "))}</div></div></button>`).join("")||`<div class="item small muted" style="cursor:default">Nothing planned yet</div>`}`; }).join("")}</div>`;
+  }
+  if (seg==="exp"){
+    body = `<button class="btn primary" data-act="add" data-sec="sharedExp">Add shared expense</button>` + (exp.length?`<div class="list">${exp.map(e=> e.transfer
+      ? `<button class="item" data-act="shEdit" data-sec="sharedExp" data-id="${e.id}"><span class="tag good">Paid back</span><div class="main"><div class="t">${esc(e.from)} paid ${esc(e.to)}</div><div class="s">${fmtDW(e.date)}</div></div><div class="r num">${money(e.tripAmt,cur)}</div></button>`
+      : `<button class="item" data-act="shEdit" data-sec="sharedExp" data-id="${e.id}"><span class="dot" style="background:${CAT_COLORS[e.cat]||"var(--muted)"}"></span><div class="main"><div class="t">${esc(e.note||e.cat)}</div><div class="s">${esc(e.paidBy)} paid · split ${(e.split&&e.split.length)?e.split.length:members.length} ways · ${fmtD(e.date)}</div></div><div class="r num" style="font-weight:600">${money(e.amount,e.cur)}${e.cur!==cur?`<div class="small muted">${money(e.tripAmt,cur)}</div>`:""}</div></button>`).join("")}</div>`:`<div class="empty">No shared expenses yet. Whoever pays adds it, and the app splits it.</div>`)
+      + `<div class="small muted num">Trip total ${money(total,cur)}${members.length?` · ${money(total/members.length,cur)} each on average`:""}</div>`;
+  }
+  if (seg==="bal"){
+    const bal = shBalances(id), plan = shSettle(bal);
+    body = `<div class="list">${Object.entries(bal).map(([n,v])=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(n)}${me&&sameName(n,me)?' <span class="tag accent">You</span>':""}</div></div><div class="r num" style="font-weight:600;color:${v>0.005?"var(--good)":v<-0.005?"var(--bad)":"var(--muted)"}">${Math.abs(v)<0.005?"square":(v>0?"gets back ":"owes ")+money(Math.abs(v),cur)}</div></div>`).join("")}</div>
+      <h3>Fewest payments to settle up</h3>${plan.length?`<div class="list">${plan.map(p=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(p.from)} pays ${esc(p.to)}</div><div class="s num">${money(p.amt,cur)}</div></div><button class="btn sm" data-act="shPaid" data-from="${esc(p.from)}" data-to="${esc(p.to)}" data-amt="${p.amt}">Mark paid</button></div>`).join("")}</div>`:`<div class="empty">Everyone is square.</div>`}`;
+  }
+  const whoami = me && members.some(m=>sameName(m,me)) ? "" : `<div class="banner"><span>Which one is you?</span><span class="row">${members.map(m=>`<button class="chip" data-act="iam" data-n="${esc(m)}">${esc(m)}</button>`).join("")}<button class="chip" data-act="addMe">I'm not listed</button></span></div>`;
+  return `<div class="row between"><button class="btn ghost sm" data-act="shOpen" data-id="">‹ Shared trips</button><span class="row"><button class="btn sm primary" data-act="invite">Invite friends</button><button class="btn sm" data-act="shEdit" data-sec="sharedTrips" data-id="${id}">Edit</button></span></div>
+    <div class="card stack"><div><div class="eyebrow">${tr.dest?esc(tr.dest)+" · ":""}Shared trip</div><h2 style="font-size:1.5rem">${esc(tr.name)}</h2><div class="muted">${fmtDW(tr.start)} – ${fmtDW(tr.end)}</div></div>
+    <div class="row">${members.map(m=>`<span class="tag${me&&sameName(m,me)?" accent":""}">${esc(m)}</span>`).join("")}</div></div>${whoami}${segH}${body}`;
+}
+function shRef(sec, tid, id){
+  if (sec==="sharedTrips") return db.collection("shared").doc(id);
+  return db.collection("shared").doc(tid).collection(sec==="sharedExp"?"expenses":"plans").doc(id);
+}
+async function shWrite(sec, tid, rec, del){
+  try { const ref = shRef(sec, tid, rec.id); if (del) await ref.delete(); else { const body = Object.assign({}, rec); delete body.id; await ref.set(body); } return true; }
+  catch(e){ toast(e && e.code==="permission-denied" ? "You're not in this trip any more. Ask for a new invite link." : "Couldn't save. Check your connection."); return false; }
+}
+
+/* ---------- render + events ---------- */
+function render(){
+  renderTabs();
+  const v = {home:viewHome, money:viewMoney, travel:viewTravel, school:viewSchool, more:viewMore}[ui.tab] || viewHome;
+  document.getElementById("app").innerHTML = v();
+}
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-act]"); if (!el) return;
+  const a = el.dataset.act, ds = el.dataset;
+  if (a==="scrim"){ if (ev.target===el) closeSheet(); return; }
+  if (a!=="wipe") ui.wipeArm = false;
+  switch(a){
+    case "tab": ui.tab = ds.k; ui.more = null; try{localStorage.setItem("xc.tab",ds.k);}catch(e){} render(); window.scrollTo(0,0); break;
+    case "close": closeSheet(); break;
+    case "add": { const preset = {}; if (ds.trip) preset.tripId = ds.trip; if (ds.date){ if (ds.sec==="plans"||ds.sec==="sharedPlans") preset.date = ds.date; if (ds.sec==="trips"){ preset.start = ds.date; preset.end = ds.end||ds.date; } if (ds.sec==="flights") preset.dep = ds.date+"T09:00"; if (ds.sec==="stays"){ preset.checkin = ds.date; preset.checkout = ds.end||ds.date; } }
+      if (ds.day!=null) preset.day = ds.day; openSheet(ds.sec,null,preset); break; }
+    case "edit": openSheet(ds.sec, ds.id); break;
+    case "del": if (!sheet.confirmDelete){ sheet.confirmDelete = true; renderSheet(); } else if (sheet.sec.startsWith("shared")){ const sec = sheet.sec, id = sheet.id, tid = sec==="sharedTrips" ? id : SH.open;
+        closeSheet();
+        const subs = sec==="sharedTrips" ? (SH.exp[id]||[]).map(e=>shWrite("sharedExp",id,e,true)).concat((SH.plans[id]||[]).map(p=>shWrite("sharedPlans",id,p,true))) : [];
+        if (sec==="sharedTrips") SH.open = null;
+        // remove a trip's expenses and plans first: once the trip is gone, nobody is a member any more
+        Promise.all(subs).then(()=>shWrite(sec, tid, {id}, true)).then(ok=>ok&&toast("Deleted")); } else { const sec = sheet.sec; S[sec] = S[sec].filter(x=>x.id!==sheet.id); if (sec==="trips"){ S.plans = S.plans.filter(p=>p.tripId!==sheet.id); ui.openTrip = null; } closeSheet(); save(sec,"plans"); toast("Deleted"); } break;
+    case "settings": openSheet("settings"); break;
+    case "month": { const [y,m] = ui.month.split("-").map(Number); const d = new Date(y, m-1+Number(ds.d), 1); ui.month = d.getFullYear()+"-"+pad(d.getMonth()+1); render(); break; }
+    case "tseg": ui.travelSeg = ds.k; ui.openTrip = null; SH.open = null; render(); break;
+    case "trip": ui.tab = "travel"; ui.travelSeg = "trips"; ui.openTrip = ds.id || null; render(); window.scrollTo(0,0); break;
+    case "day": ui.schoolDay = Number(ds.i); render(); break;
+    case "more": ui.tab = "more"; ui.more = ds.k || null; render(); window.scrollTo(0,0); break;
+    case "toggle": { const it = S[ds.sec].find(x=>x.id===ds.id); if (it){ it.done = !it.done; save(ds.sec); } break; }
+    case "unpack": S.packing.forEach(p=>{ if ((p.list||"Before departure")===ds.l) p.done=false; }); save("packing"); break;
+    case "spainAdmin": SPAIN_ADMIN.forEach(([title,kind,n])=>S.deadlines.push({id:uidGen(),title,kind,course:"",due:addDays(today(),n),done:false,spain:true,note:"Suggested date, adjust it"})); save("deadlines"); toast("Checklist added"); break;
+    case "sosStarter": EMERGENCY_STARTER.forEach(([label,value,note])=>S.contacts.push({id:uidGen(),label,value,note})); save("contacts"); break;
+    case "packStarter": STARTER.forEach(([text,list])=>S.packing.push({id:uidGen(),text,list,done:false})); save("packing"); break;
+    case "settle": { const v = Number(ds.v), n = ds.n; S.expenses.push({id:uidGen(),date:today(),cat:"Other",note:"Settled up with "+n,amount:Math.abs(v),cur:S.settings.home,paidBy:v>0?n:"me",splitWith:"",tripId:"",settle:true,person:n,delta:v});
+      // a settlement is a transfer: it zeroes the balance and doesn't count as spending
+      save("expenses"); toast("Settled with "+n); break; }
+    case "copy": { const v = ds.v; navigator.clipboard.writeText(v).then(()=>toast("Copied"),()=>toast(v)); break; }
+    case "shOpen": SH.open = ds.id || null; SH.seg = "plan"; render(); window.scrollTo(0,0); break;
+    case "shSeg": SH.seg = ds.k; render(); break;
+    case "invite": { const url = location.origin + location.pathname + "#join=" + SH.open; const tr = shTrip(SH.open);
+      const text = "Join our trip \""+(tr?tr.name:"")+"\" in Exchange Companion: ";
+      if (navigator.share){ navigator.share({title:tr?tr.name:"Trip", text, url}).catch(()=>{}); }
+      else navigator.clipboard.writeText(url).then(()=>toast("Invite link copied"),()=>toast(url));
+      break; }
+    case "addMe": { if (!myName()){ toast("Set your name first"); openSheet("settings"); break; }
+      db.collection("shared").doc(SH.open).update({members: firebase.firestore.FieldValue.arrayUnion(myName())}).then(()=>toast("Added you to the trip"),()=>toast("Couldn't add you. Check your connection."));
+      break; }
+    case "shEdit": openSheet(ds.sec, ds.id); break;
+    case "iam": S.settings.myName = ds.n; save("settings"); toast("Got it, you're "+ds.n); break;
+    case "shPaid": { const tr = shTrip(SH.open); const amt = Math.round(Number(ds.amt)*100)/100; shWrite("sharedExp", SH.open, {id:uidGen(), transfer:true, from:ds.from, to:ds.to, amount:amt, cur:tr.cur||"EUR", tripAmt:amt, date:today(), by:myName()}).then(ok=>ok&&toast("Marked as paid")); break; }
+    case "semester": { const s = SEMESTERS[Number(ds.i)]; document.getElementById("s_start").value = s[1]; document.getElementById("s_end").value = s[2]; break; }
+    case "loadEx": loadExamples(); break;
+    case "clearEx": clearAll(); toast("Examples cleared"); break;
+    case "export": exportData(); break;
+    case "import": document.getElementById("importFile").click(); break;
+    case "wipe": if (!ui.wipeArm){ ui.wipeArm = true; render(); } else { ui.wipeArm = false; S = blank(); save(...SECTIONS); toast("Everything erased"); } break;
+  }
+});
+document.addEventListener("keydown", ev=>{ if (ev.key==="Escape" && sheet) closeSheet(); });
+
+initStore();
+})();
+</script>
+
+</body>
+</html>
