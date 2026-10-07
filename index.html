@@ -482,7 +482,7 @@ const SCHEMA = {
     {k:"paidBy",label:"Paid by",type:"text",def:"me",hint:"\"me\" or a friend's name"},{k:"splitWith",label:"Split with",type:"text",hint:"Friends' names, comma separated"},
     {k:"tripId",label:"Trip",type:"select",opts:tripOpts,full:true},
     {k:"group",label:"Sheet type",type:"select",opts:()=>[["","Auto"]].concat(SHEET_GROUPS.map(x=>[x,x])),hint:"Daily, Monthly, Pre-Trip or Travel in your budget sheet"},{k:"city",label:"City / country",type:"text"}]},
-  trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"note",label:"Notes",type:"textarea",full:true}]},
+  trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"wanderlog",label:"Wanderlog trip link",type:"text",full:true,hint:"In Wanderlog, tap Share › Copy link and paste it here"},{k:"note",label:"Notes",type:"textarea",full:true}]},
   plans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"textarea",full:true}]},
   flights:{title:"Flight", fields:[{k:"from",label:"From (airport code)",type:"text",req:true,upper:true},{k:"to",label:"To (airport code)",type:"text",req:true,upper:true},
     {k:"dep",label:"Departs",type:"datetime-local",req:true},{k:"arr",label:"Arrives",type:"datetime-local"},{k:"airline",label:"Airline",type:"text"},{k:"num",label:"Flight no.",type:"text",upper:true},
@@ -755,7 +755,8 @@ function tripDetail(id){
   return `<div class="row between"><button class="btn ghost sm" data-act="trip" data-id="">‹ All trips</button><button class="btn sm" data-act="edit" data-sec="trips" data-id="${id}">Edit trip</button></div>
     <div class="card stack"><div><div class="eyebrow">${esc(tr.dest||"Trip")}</div><h2 style="font-size:1.5rem">${esc(tr.name)}</h2><div class="muted">${fmtDW(tr.start)} – ${fmtDW(tr.end)}</div></div>
     <div class="grid2"><div><div class="eyebrow">Booked (flights + stays)</div><div class="num" style="font-weight:600">${money(costs,null,0)}</div></div><div><div class="eyebrow">Spent on the trip</div><div class="num" style="font-weight:600">${money(spent,null,0)}${tr.budget?` <span class="muted small">of ${money(tr.budget,null,0)}</span>`:""}</div></div></div>
-    ${tr.note?`<div class="small">${esc(tr.note)}</div>`:""}</div>
+    ${tr.note?`<div class="small">${esc(tr.note)}</div>`:""}
+    ${/^https:\/\/(www\.)?wanderlog\.com\//.test(tr.wanderlog||"")?`<a class="btn sm" href="${esc(tr.wanderlog)}" target="_blank" rel="noopener" style="align-self:flex-start">Open in Wanderlog ↗</a>`:`<button class="btn ghost sm" data-act="edit" data-sec="trips" data-id="${id}" style="align-self:flex-start">+ Link a Wanderlog trip</button>`}</div>
     <div class="row"><button class="btn sm" data-act="add" data-sec="flights" data-date="${tr.start}">Add flight</button><button class="btn sm" data-act="add" data-sec="stays" data-date="${tr.start}" data-end="${tr.end}">Add stay</button><button class="btn sm" data-act="add" data-sec="expenses" data-trip="${id}">Add expense</button></div>
     <div class="list tl">${dayH}</div>`;
 }
