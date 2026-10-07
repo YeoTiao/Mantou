@@ -68,9 +68,13 @@ h3{font-size:1rem}
 .gate h1{font-family:var(--display);font-size:2rem;margin:0}
 .gate p{margin:0}
 .cover{width:200px;height:200px;border-radius:44px;background:radial-gradient(circle at 50% 40%,#FFF4DE 0,#F6E3BD 60%,#EBCB92 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px rgba(185,97,30,.25);margin-bottom:8px}
+.cover.small{width:130px;height:130px;border-radius:30px}
+.cover.small img{width:100px;height:100px}
+.uname-at{display:flex;align-items:center;padding:0 10px;background:var(--sunk);border:1px solid var(--line);border-right:0;border-radius:10px 0 0 10px;color:var(--muted);font-family:var(--mono)}
 .cover img{width:150px;height:150px}
 .gbtn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;font-size:1rem}
 .gbtn svg{background:#fff;border-radius:4px;padding:2px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .save-pill{font-size:.75rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .save-pill.ok{background:var(--accent-soft);color:var(--accent)}
 
@@ -314,6 +318,7 @@ async function signOut(){
   Object.values(SH.subs).forEach(a=>a.forEach(u=>u())); SH.subs = {}; SH.trips = []; SH.exp = {}; SH.plans = {}; if (SH.unsub){ SH.unsub(); SH.unsub = null; }
   S = blank(); try { ["xc.data","xc.owner","xc.sync","xc.dirty"].forEach(k=>localStorage.removeItem(k)); } catch(e){}
   GS.st = {base:{}, tomb:{}, last:null, issues:{}};
+  AUTH.username = ""; AUTH.unameLoaded = false; UNAME.draft = null; UNAME.editing = false;
   ui.tab = "home"; ui.more = null;
   try { await firebase.auth().signOut(); } catch(e){}
   render();
@@ -331,6 +336,7 @@ async function startCloud(user){
   CLOUD.ref.set(profile, {merge:true}).catch(()=>{});
   CLOUD.unsub.push(CLOUD.ref.onSnapshot(d=>{
     const rs = d.exists && d.data().settings;
+    AUTH.username = d.exists && d.data().username || ""; AUTH.unameLoaded = true;
     if (!CLOUD.first.settings){ CLOUD.first.settings = true;
       if (!rs || CLOUD.mode==="merge" && !rs.savedAt) { cloudPush(["settings"]); return gotFirst(); } }
     if (rs){ CLOUD.remote.settings = JSON.stringify(rs); S.settings = Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), rs); if (!S.settings.rates) S.settings.rates = Object.assign({},DEFAULT_RATES_SGD); cacheLocal(); render(); }
@@ -368,6 +374,61 @@ function cloudPush(secs){
   });
   for (let i=0; i<writes.length; i+=400){ const b = db.batch(); writes.slice(i,i+400).forEach(w=>w(b)); b.commit().catch(e=>toast("Couldn't save to your account: "+(e.code||e.message))); }
 }
+/* ---------- usernames ----------
+   usernames/{name} = {uid} reserves a name (one owner each, enforced by firestore.rules);
+   users/{uid}.username is the current one. Lowercase letters, numbers, dot and underscore. */
+const UNAME = {draft:null, state:"", msg:"", timer:null, busy:false};
+const normName = s => String(s||"").toLowerCase().replace(/^@/,"").replace(/[^a-z0-9_.]/g,"");
+const nameOk = n => /^[a-z0-9_.]{3,20}$/.test(n) && !/^[._]|[._]$|\.\./.test(n);
+function suggestName(){ const u = AUTH.user||{}; const base = normName((u.displayName||"").replace(/\s+/g,".")) || normName((u.email||"").split("@")[0]); return base.slice(0,20); }
+function checkName(n){
+  clearTimeout(UNAME.timer); UNAME.draft = n;
+  if (!n){ UNAME.state = ""; UNAME.msg = ""; return paintName(); }
+  if (!nameOk(n)){ UNAME.state = "bad"; UNAME.msg = "3 to 20 characters: letters, numbers, dot or underscore. It can't start or end with a dot or underscore."; return paintName(); }
+  if (n===AUTH.username){ UNAME.state = "mine"; UNAME.msg = "That's your current username."; return paintName(); }
+  UNAME.state = "checking"; UNAME.msg = "Checking…"; paintName();
+  UNAME.timer = setTimeout(async ()=>{
+    try { const d = await db.collection("usernames").doc(n).get(); if (UNAME.draft!==n) return;
+      const free = !d.exists || d.data().uid===uid; UNAME.state = free?"ok":"taken"; UNAME.msg = free?"@"+n+" is available.":"@"+n+" is taken. Try another.";
+    } catch(e){ UNAME.state = "bad"; UNAME.msg = "Couldn't check right now. Are you online?"; }
+    paintName();
+  }, 350);
+}
+function paintName(){ const m = document.getElementById("unameMsg"), b = document.getElementById("unameSave");
+  if (m){ m.textContent = UNAME.msg; m.style.color = UNAME.state==="ok"?"var(--good)":UNAME.state==="bad"||UNAME.state==="taken"?"var(--bad)":"var(--muted)"; }
+  if (b) b.disabled = UNAME.busy || UNAME.state!=="ok"; }
+async function claimName(){
+  const n = UNAME.draft; if (!n || UNAME.state!=="ok" || UNAME.busy) return;
+  UNAME.busy = true; paintName();
+  const old = AUTH.username, users = db.collection("usernames");
+  try {
+    await db.runTransaction(async tx=>{
+      const d = await tx.get(users.doc(n));
+      if (d.exists && d.data().uid!==uid) throw {code:"taken"};
+      tx.set(users.doc(n), {uid, at:firebase.firestore.FieldValue.serverTimestamp()});
+      if (old && old!==n) tx.delete(users.doc(old));
+      tx.set(CLOUD.ref, {username:n}, {merge:true});
+    });
+    AUTH.username = n; UNAME.draft = null; UNAME.state = ""; UNAME.msg = ""; UNAME.editing = false;
+    if (!myName() || myName()===old) { S.settings.myName = n; save("settings"); }
+    toast("You're @"+n); render();
+  } catch(e){ UNAME.state = e.code==="taken"?"taken":"bad"; UNAME.msg = e.code==="taken"?"@"+n+" was just taken. Try another.":"Couldn't save that username ("+(e.code||e.message||e)+")."; }
+  UNAME.busy = false; paintName();
+}
+function nameForm(first){
+  const v = UNAME.draft!=null ? UNAME.draft : (AUTH.username || suggestName());
+  if (UNAME.draft==null){ setTimeout(()=>checkName(v), 0); }
+  return `<form class="stack" id="unameForm" onsubmit="return false" style="width:100%"><div class="field full" style="text-align:left"><label for="uname">Username</label>
+    <div class="row" style="gap:0;align-items:stretch"><span class="uname-at">@</span><input id="uname" value="${esc(v)}" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="20" style="border-top-left-radius:0;border-bottom-left-radius:0;flex:1"></div>
+    <span class="hint" id="unameMsg"></span></div>
+    <div class="row" style="justify-content:${first?"center":"flex-end"}">${first?"":`<button type="button" class="btn ghost sm" data-act="unameCancel">Cancel</button>`}<button type="button" class="btn primary${first?"":" sm"}" id="unameSave" data-act="unameSave" disabled>${first?"Continue":"Save"}</button></div></form>`;
+}
+function viewPickName(){
+  return `<div class="gate stack"><div class="cover small"><img src="icons/mantou.svg" alt="" width="110" height="110"></div><h1 style="font-size:1.6rem">Pick a username</h1>
+    <p class="muted">Your unique name in Mantou. You can change it later in Settings.</p>${nameForm(true)}</div>`;
+}
+document.addEventListener("input", ev=>{ if (ev.target.id==="uname"){ const n = normName(ev.target.value); if (n!==ev.target.value) ev.target.value = n; checkName(n); } });
+document.addEventListener("keydown", ev=>{ if (ev.target.id==="uname" && ev.key==="Enter"){ ev.preventDefault(); claimName(); } });
 function viewGate(){
   const busy = AUTH.state==="loading";
   const msg = AUTH.state==="noconn" ? "You're offline. Connect to the internet to sign in." : "";
@@ -808,7 +869,8 @@ function settingsView(){
   const st = S.settings;
   return `<div class="card stack"><div class="row between"><div><div class="eyebrow">Exchange</div><div style="font-weight:600">${esc([st.school,st.city,st.country].filter(Boolean).join(", ")||"Not set")}</div><div class="small muted">${st.start?fmtD(st.start,{day:"numeric",month:"short",year:"numeric"})+" – "+fmtD(st.end,{day:"numeric",month:"short",year:"numeric"}):"No dates yet"}</div></div><button class="btn sm" data-act="settings">Edit</button></div>
     <div class="small muted num">Home ${esc(st.home)} · Local ${esc(st.local)} · Budget ${money(st.budget,null,0)} a month</div></div>
-    ${AUTH.state==="in"?`<div class="card stack"><div class="row between"><div><div class="eyebrow">Signed in</div><div style="font-weight:600">${esc(AUTH.user.displayName||"")}</div><div class="small muted">${esc(AUTH.user.email||"")}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div><div class="small muted">Everything is saved to your account, so you can sign in on another phone and pick up where you left off. Signing out removes the copy on this phone.</div></div>`:""}
+    ${AUTH.state==="in"?`<div class="card stack"><div class="row between"><div><div class="eyebrow">Signed in</div><div style="font-weight:600">${esc(AUTH.user.displayName||"")}${AUTH.username?` <span class="muted mono" style="font-weight:500">@${esc(AUTH.username)}</span>`:""}</div><div class="small muted">${esc(AUTH.user.email||"")}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>
+    ${UNAME.editing?nameForm(false):`<div><button class="btn sm ghost" data-act="unameEdit">Change username</button></div>`}<div class="small muted">Everything is saved to your account, so you can sign in on another phone and pick up where you left off. Signing out removes the copy on this phone.</div></div>`:""}
     <div class="card stack"><h3>Backups</h3><div class="small">${AUTH.state==="in"?"Your data is in your account and only you can see it. Shared trips are visible to the friends on them. You can still export a backup file whenever you want one.":"Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them."}</div>
     <div class="row"><button class="btn sm" data-act="export">Export backup</button><button class="btn sm" data-act="import">Import backup</button></div><div class="hint" id="ioMsg"></div></div>
     ${gsCard()}
@@ -1163,6 +1225,7 @@ function render(){
   const gated = !["in","local","offline"].includes(AUTH.state) && !(AUTH.state==="loading" && localOwner());
   document.querySelector("nav.tabs").hidden = gated;
   if (gated){ document.getElementById("app").innerHTML = viewGate(); return; }
+  if (AUTH.state==="in" && AUTH.unameLoaded && !AUTH.username){ document.querySelector("nav.tabs").hidden = true; document.getElementById("app").innerHTML = viewPickName(); paintName(); return; }
   renderTabs();
   const v = {home:viewHome, money:viewMoney, travel:viewTravel, school:viewSchool, more:viewMore}[ui.tab] || viewHome;
   document.getElementById("app").innerHTML = v();
@@ -1219,6 +1282,9 @@ document.addEventListener("click", ev=>{
       S.settings.gsync = {url:u, token:t}; GS.err = ""; cacheLocal(); render(); gsSync(true); break; }
     case "gsNow": gsSync(true); break;
     case "signIn": signIn(); break;
+    case "unameSave": claimName(); break;
+    case "unameEdit": UNAME.editing = true; UNAME.draft = null; render(); break;
+    case "unameCancel": UNAME.editing = false; UNAME.draft = null; render(); break;
     case "signOut": signOut(); break;
     case "gsOff": delete S.settings.gsync; GS.err = ""; cacheLocal(); render(); toast("Sheets unlinked"); break;
     case "loadEx": loadExamples(); break;

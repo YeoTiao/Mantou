@@ -16,6 +16,13 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
     }
+    // Usernames: one doc per name, owned by one account. Anyone signed in can check if a name is free.
+    match /usernames/{name} {
+      allow read: if signedIn();
+      allow create: if isOwner(request.resource.data.uid)
+        && name.matches('^[a-z0-9_.]{3,20}$') && request.resource.data.keys().hasOnly(['uid', 'at']);
+      allow delete: if isOwner(resource.data.uid);
+    }
     match /shared/{tid} {
       allow read, delete: if signedIn() && request.auth.uid in resource.data.memberUids;
       allow create: if signedIn() && request.resource.data.memberUids == [request.auth.uid];
