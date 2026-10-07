@@ -5,6 +5,17 @@ service cloud.firestore {
     function memberOf(tid) {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/shared/$(tid)).data.memberUids;
     }
+    // Each person's own data: a profile doc plus one collection per data type
+    // (users/{uid}/expenses, /trips, /flights, ...). Only that Google account can read or write it.
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+      match /{section}/{id} {
+        allow read, write: if isOwner(uid);
+      }
+    }
     match /shared/{tid} {
       allow read, delete: if signedIn() && request.auth.uid in resource.data.memberUids;
       allow create: if signedIn() && request.resource.data.memberUids == [request.auth.uid];

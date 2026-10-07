@@ -17,29 +17,43 @@ To install it on a phone, open that link:
 - **iPhone (Safari):** tap Share, then **Add to Home Screen**.
 - **Android (Chrome):** tap the ⋮ menu, then **Add to Home screen** or **Install app**.
 
-## Switch on shared trips (free Firebase project, about 10 minutes)
+## Switch on accounts and shared trips (free Firebase project)
 
-Without this step everything works except the **Travel › With friends** tab.
+Everyone signs in with Google. Each person's data is saved to their own account, so they can switch phones, and you can see who has signed up.
 
-1. Go to https://console.firebase.google.com, click **Create a project**, and give it a name. Google Analytics isn't needed.
-2. **Build › Authentication › Get started › Sign-in method:** turn on **Anonymous**.
+1. Go to https://console.firebase.google.com, click **Create a project**, and give it a name.
+2. **Build › Authentication › Get started › Sign-in method:** turn on **Google**. Anonymous can stay on for older phones.
 3. **Build › Firestore Database › Create database:** pick a location near you, such as `eur3` or `europe-southwest1` (Madrid), and start in **production mode**.
-4. In Firestore, open the **Rules** tab, replace everything with the contents of [`firestore.rules`](firestore.rules), and click **Publish**.
+4. In Firestore, open the **Rules** tab, replace everything with the contents of [`firestore.rules`](firestore.rules), and click **Publish**. Do this again whenever `firestore.rules` changes.
 5. **Project settings (gear icon) › General › Your apps:** click the web icon `</>`, register an app (no hosting needed), and copy the `firebaseConfig` values.
 6. Paste them into [`config.js`](config.js) so it reads `window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." };` and commit.
 7. **Authentication › Settings › Authorized domains:** add `<your-username>.github.io`.
 
-The Firebase config isn't a password: it's meant to be public. The rules in `firestore.rules` are what keep trips private to the people invited.
+The Firebase config isn't a password: it's meant to be public. The rules in `firestore.rules` are what keep each person's data private and keep trips limited to the people invited.
 
-The free Spark plan is far more than a group of friends will use.
+If `config.js` is left empty, the app runs without accounts and keeps everything on the phone.
+
+## Where the data lives
+
+| Firestore path | What's in it |
+| --- | --- |
+| `users/{uid}` | Profile (name, email, first and last seen) and settings |
+| `users/{uid}/expenses`, `/trips`, `/plans`, `/flights`, `/stays`, `/housing`, `/bucket`, `/classes`, `/deadlines`, `/wallet`, `/packing`, `/contacts`, `/places`, `/journal` | One collection per data type, one document per item |
+| `shared/{tripId}` with `expenses` and `plans` | Shared trips and their bills |
+
+- **Who's using it:** the **Authentication › Users** tab lists everyone who has signed up. Each `users/{uid}` doc shows when they last opened the app.
+- **Exporting one type of data:** each type is its own collection, so it can be exported on its own. For example, `gcloud firestore export gs://<bucket> --collection-ids=expenses` exports every user's expenses. You can also query one type across all users with a collection-group query.
+- **First sign-in on a phone:** anything already saved on that phone moves into the account. If a different person signs in on the same phone, the previous person's data is removed from the phone first. Signing out removes the phone's copy.
+- **Offline:** the app keeps working offline, and changes upload when the phone is back online.
+
+The free Spark plan covers a few thousand active users.
 
 ## How sharing works
 
-- Each phone gets an anonymous ID the first time it opens the app.
-- Starting a shared trip makes you its first member. **Invite friends** sends a link. Opening it adds that phone to the trip.
+- Starting a shared trip makes you its first member. **Invite friends** sends a link. Opening it, and signing in, adds that person to the trip.
 - Members can add plans and expenses, see who owes who, and mark payments as settled.
 - Anyone holding a trip's invite link can join it, so send the link only to the people going.
-- If someone clears their browser data or changes phone, they open the invite link again to rejoin.
+- Because trips are tied to the Google account, they follow you to a new phone.
 
 ## Link your Google Sheets (two-way sync)
 

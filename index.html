@@ -63,6 +63,12 @@ h3{font-size:1rem}
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .brand{display:flex;align-items:center;gap:10px}
 .brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:.8rem}
+.gate{max-width:420px;margin:12vh auto 0;padding:0 16px;text-align:center;align-items:center}
+.gate h1{font-family:var(--display);font-size:2rem;margin:0}
+.gate p{margin:0}
+.brand-mark.big{width:64px;height:64px;font-size:1.1rem}
+.gbtn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;font-size:1rem}
+.gbtn svg{background:#fff;border-radius:4px;padding:2px}
 .save-pill{font-size:.75rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .save-pill.ok{background:var(--accent-soft);color:var(--accent)}
 
@@ -232,7 +238,7 @@ let db = null, uid = null; const pending = {}; let flushTimer = null;
 function cacheLocal(){ try { localStorage.setItem("xc.data", JSON.stringify(S)); } catch(e){} }
 function loadLocal(){ try { const raw = localStorage.getItem("xc.data"); if (raw){ const d = JSON.parse(raw); merge(d); return true; } } catch(e){} return false; }
 function merge(d){ SECTIONS.forEach(k=>{ if (d && d[k] !== undefined) S[k] = k==="settings" ? Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), d[k]) : d[k]; }); if (!S.settings.rates) S.settings.rates = Object.assign({},DEFAULT_RATES_SGD); }
-function save(...secs){ cacheLocal(); render(); if (secs.some(k=>GS_SECS.includes(k))) gsSoon(); }
+function save(...secs){ cacheLocal(); render(); cloudPush(secs.length?secs:SECTIONS); if (secs.some(k=>GS_SECS.includes(k))) gsSoon(); }
 async function initStore(){
   loadLocal();
   render();
@@ -241,9 +247,15 @@ async function initStore(){
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 function loadScript(src){ return new Promise((ok,bad)=>{ const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = bad; document.head.appendChild(el); }); }
+/* ---------- accounts: Google sign-in, data per user in Firestore ----------
+   users/{uid}            profile (name, email, lastSeen) + settings
+   users/{uid}/{section}  one collection per data type (expenses, trips, flights, ...)
+   The phone keeps a cached copy (xc.data) so the app opens instantly and works offline. */
+const AUTH = {state:"loading", user:null, err:""};
+const CLOUD = {uid:null, ref:null, remote:{}, first:{}, mode:"remote", unsub:[]};
 async function initFirebase(){
   const cfg = window.FIREBASE_CONFIG;
-  if (!cfg || !cfg.apiKey){ SH.status = "unconfigured"; render(); return; }
+  if (!cfg || !cfg.apiKey){ SH.status = "unconfigured"; AUTH.state = "local"; render(); return; }
   SH.status = "loading";
   try {
     const v = "10.12.2", base = "https://www.gstatic.com/firebasejs/"+v+"/";
@@ -252,13 +264,117 @@ async function initFirebase(){
     firebase.initializeApp(cfg);
     const fs = firebase.firestore();
     try { await fs.enablePersistence({synchronizeTabs:true}); } catch(e){}
-    firebase.auth().onAuthStateChanged(async user=>{
-      if (!user){ try { await firebase.auth().signInAnonymously(); } catch(e){ SH.status = "error"; render(); } return; }
-      db = fs; uid = user.uid;
-      await joinFromLink();
-      startShared();
-    });
-  } catch(e){ SH.status = "offline"; render(); }
+    db = fs;
+    firebase.auth().getRedirectResult().catch(e=>authError(e));
+    firebase.auth().onAuthStateChanged(user=>onUser(user));
+  } catch(e){
+    SH.status = "offline";
+    // Can't reach the sign-in service. Let someone who already signed in on this phone keep using the cached copy.
+    AUTH.state = localOwner() ? "offline" : "noconn"; render();
+  }
+}
+function localOwner(){ try { return localStorage.getItem("xc.owner"); } catch(e){ return null; } }
+async function onUser(user){
+  if (!user || user.isAnonymous){ AUTH.user = user; AUTH.state = "out"; SH.status = "off"; render(); return; }
+  if (CLOUD.uid === user.uid) return;
+  AUTH.user = user; AUTH.state = "in"; uid = user.uid;
+  if (!S.settings.myName && user.displayName) S.settings.myName = user.displayName.split(" ")[0];
+  render();
+  await startCloud(user);
+  await joinFromLink();
+  startShared();
+}
+async function signIn(){
+  const auth = firebase.auth(), p = new firebase.auth.GoogleAuthProvider(), cur = auth.currentUser;
+  p.setCustomParameters({prompt:"select_account"});
+  AUTH.err = ""; render();
+  try {
+    // An anonymous phone that already joined shared trips keeps its ID (and its trips) by linking.
+    if (cur && cur.isAnonymous) { const r = await cur.linkWithPopup(p); onUser(r.user); }
+    else await auth.signInWithPopup(p);
+  } catch(e){
+    if ((e.code==="auth/credential-already-in-use" || e.code==="auth/email-already-in-use") && e.credential){ try { await auth.signInWithCredential(e.credential); } catch(e2){ authError(e2); } }
+    else if (e.code==="auth/popup-blocked" || e.code==="auth/operation-not-supported-in-this-environment" || e.code==="auth/cancelled-popup-request"){
+      try { if (cur && cur.isAnonymous) await cur.linkWithRedirect(p); else await auth.signInWithRedirect(p); } catch(e2){ authError(e2); } }
+    else authError(e);
+  }
+}
+function authError(e){
+  if (!e || e.code==="auth/popup-closed-by-user" || e.code==="auth/user-cancelled") return;
+  AUTH.err = e.code==="auth/unauthorized-domain" ? "Sign-in isn't allowed on this web address yet. Add it under Firebase › Authentication › Settings › Authorized domains."
+    : e.code==="auth/operation-not-allowed" ? "Google sign-in isn't switched on yet. Turn it on under Firebase › Authentication › Sign-in method."
+    : e.code==="auth/network-request-failed" ? "No connection. Try again when you're online."
+    : "Sign-in didn't work ("+(e.code||e.message||e)+").";
+  render();
+}
+async function signOut(){
+  CLOUD.unsub.forEach(u=>{ try{u();}catch(e){} }); CLOUD.unsub = []; CLOUD.uid = null; CLOUD.ref = null; CLOUD.remote = {}; CLOUD.first = {}; CLOUD.ready = false;
+  Object.values(SH.subs).forEach(a=>a.forEach(u=>u())); SH.subs = {}; SH.trips = []; SH.exp = {}; SH.plans = {}; if (SH.unsub){ SH.unsub(); SH.unsub = null; }
+  S = blank(); try { ["xc.data","xc.owner","xc.sync","xc.dirty"].forEach(k=>localStorage.removeItem(k)); } catch(e){}
+  GS.st = {base:{}, tomb:{}, last:null, issues:{}};
+  ui.tab = "home"; ui.more = null;
+  try { await firebase.auth().signOut(); } catch(e){}
+  render();
+}
+const clean = o => JSON.parse(JSON.stringify(o));
+async function startCloud(user){
+  const owner = localOwner(); let dirty = false; try { dirty = !!localStorage.getItem("xc.dirty"); } catch(e){}
+  // First sign-in on this phone: upload what's here. Someone else's data on this phone: drop it. Otherwise the account is the truth.
+  CLOUD.mode = !owner ? "merge" : owner!==user.uid ? "replace" : dirty ? "merge" : "remote";
+  if (S.settings.hasExamples){ S = blank(); if (CLOUD.mode==="merge") CLOUD.mode = "replace"; }
+  if (CLOUD.mode==="replace"){ S = blank(); GS.st = {base:{}, tomb:{}, last:null, issues:{}}; try { localStorage.removeItem("xc.sync"); } catch(e){} }
+  CLOUD.uid = user.uid; CLOUD.ref = db.collection("users").doc(user.uid); CLOUD.remote = {}; CLOUD.first = {}; CLOUD.ready = false;
+  const profile = {name:user.displayName||"", email:user.email||"", photo:user.photoURL||"", lastSeen:firebase.firestore.FieldValue.serverTimestamp(), app:"mantou"};
+  try { const d = await CLOUD.ref.get(); if (!d.exists) profile.createdAt = firebase.firestore.FieldValue.serverTimestamp(); } catch(e){}
+  CLOUD.ref.set(profile, {merge:true}).catch(()=>{});
+  CLOUD.unsub.push(CLOUD.ref.onSnapshot(d=>{
+    const rs = d.exists && d.data().settings;
+    if (!CLOUD.first.settings){ CLOUD.first.settings = true;
+      if (!rs || CLOUD.mode==="merge" && !rs.savedAt) { cloudPush(["settings"]); return gotFirst(); } }
+    if (rs){ CLOUD.remote.settings = JSON.stringify(rs); S.settings = Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), rs); if (!S.settings.rates) S.settings.rates = Object.assign({},DEFAULT_RATES_SGD); cacheLocal(); render(); }
+    gotFirst();
+  }, ()=>{}));
+  SECTIONS.slice(1).forEach(sec=>{
+    CLOUD.unsub.push(CLOUD.ref.collection(sec).onSnapshot(snap=>{
+      const items = snap.docs.map(d=>Object.assign({}, d.data(), {id:d.id}));
+      const map = new Map(items.map(it=>[it.id, JSON.stringify(clean(it))]));
+      let next = items;
+      if (!CLOUD.first[sec]){ CLOUD.first[sec] = true;
+        if (CLOUD.mode==="merge"){ const extra = (S[sec]||[]).filter(it=>!map.has(it.id)); next = items.concat(extra); CLOUD.remote[sec] = map; S[sec] = keepOrder(S[sec], next); cloudPush([sec]); cacheLocal(); render(); gotFirst(); return; } }
+      CLOUD.remote[sec] = map; S[sec] = keepOrder(S[sec], next); cacheLocal(); render(); gotFirst();
+    }, ()=>{}));
+  });
+}
+// Keep the phone's order for items it already has; new ones go at the end.
+function keepOrder(old, next){ const pos = new Map((old||[]).map((x,i)=>[x.id,i])); return next.slice().sort((a,b)=>(pos.has(a.id)?pos.get(a.id):1e9)-(pos.has(b.id)?pos.get(b.id):1e9)); }
+function gotFirst(){
+  if (!CLOUD.uid || CLOUD.ready || !CLOUD.first.settings || SECTIONS.slice(1).some(k=>!CLOUD.first[k])) return;
+  try { localStorage.setItem("xc.owner", CLOUD.uid); localStorage.removeItem("xc.dirty"); } catch(e){}
+  CLOUD.mode = "remote"; CLOUD.ready = true; gsSoon();
+}
+function cloudPush(secs){
+  if (!CLOUD.ref){ if (AUTH.state==="offline") try { localStorage.setItem("xc.dirty","1"); } catch(e){} return; }
+  const writes = [];
+  secs.forEach(sec=>{
+    if (sec==="settings"){ if (!CLOUD.first.settings && CLOUD.mode!=="merge") return; const st = clean(Object.assign({}, S.settings, {savedAt:Date.now()})); const j = JSON.stringify(st);
+      if (j!==CLOUD.remote.settings){ CLOUD.remote.settings = j; writes.push(b=>b.set(CLOUD.ref, {settings:st}, {mergeFields:["settings"]})); } return; }
+    if (!CLOUD.first[sec] && CLOUD.mode!=="merge") return;   // not loaded yet: don't overwrite the account with a stale copy
+    const remote = CLOUD.remote[sec] = CLOUD.remote[sec] || new Map(); const col = CLOUD.ref.collection(sec); const seen = new Set();
+    (S[sec]||[]).forEach(it=>{ if (!it || !it.id) return; seen.add(it.id); const c = clean(it); const j = JSON.stringify(c);
+      if (remote.get(it.id)!==j){ remote.set(it.id, j); writes.push(b=>b.set(col.doc(it.id), c)); } });
+    [...remote.keys()].forEach(id=>{ if (!seen.has(id)){ remote.delete(id); writes.push(b=>b.delete(col.doc(id))); } });
+  });
+  for (let i=0; i<writes.length; i+=400){ const b = db.batch(); writes.slice(i,i+400).forEach(w=>w(b)); b.commit().catch(e=>toast("Couldn't save to your account: "+(e.code||e.message))); }
+}
+function viewGate(){
+  const busy = AUTH.state==="loading";
+  const msg = AUTH.state==="noconn" ? "You're offline. Connect to the internet to sign in." : "";
+  return `<div class="gate stack"><div class="brand-mark big" aria-hidden="true">MAD</div><h1>Exchange Companion</h1>
+    <p class="muted">Budget, trips, flights, flats, timetable and bill splitting for your exchange. Sign in to keep everything in your account and use it on any phone.</p>
+    ${busy?`<div class="muted small">Loading…</div>`:AUTH.state==="noconn"?`<div class="small">${msg}</div>`:`<button class="btn primary gbtn" data-act="signIn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.7-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.4 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1C3.4 21.4 7.4 24 12 24z"/><path fill="#FBBC05" d="M5.4 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4V6.5H1.4C.5 8.2 0 10 0 12s.5 3.8 1.4 5.5z"/><path fill="#EA4335" d="M12 4.8c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.6 1.4 6.5l4 3.1C6.3 6.9 8.9 4.8 12 4.8z"/></svg>Continue with Google</button>`}
+    ${AUTH.err?`<div class="small" style="color:var(--bad)">${esc(AUTH.err)}</div>`:""}
+    ${localOwner()===null && SECTIONS.slice(1).some(k=>(S[k]||[]).length && !S.settings.hasExamples)?`<div class="small muted">What's already on this phone will be moved into your account.</div>`:""}
+    <div class="small muted">Signing in with Google gives the app your name and email only. Nothing is posted to your Google account.</div></div>`;
 }
 async function joinFromLink(){
   const m = location.hash.match(/^#join=([A-Za-z0-9_-]{6,40})$/); if (!m) return;
@@ -431,7 +547,9 @@ function renderTabs(){
 }
 function topBar(title, sub){
   const st = S.settings;
-  const pill = `<span class="save-pill ok" title="Your data is kept on this device. Shared trips sync with friends.">Saved on this phone</span>`;
+  const pill = AUTH.state==="in" ? `<span class="save-pill ok" title="Saved to your account (${esc(AUTH.user&&AUTH.user.email||"")}) and on this phone.">Saved to account</span>`
+    : AUTH.state==="offline" ? `<span class="save-pill" title="Can't reach your account right now. Changes stay on this phone and upload when you're back online.">Offline</span>`
+    : `<span class="save-pill ok" title="Your data is kept on this device.">Saved on this phone</span>`;
   return `<header class="top" id="topbar"><div class="brand"><div class="brand-mark" aria-hidden="true">${esc((st.local||"EX").slice(0,3))}</div><div><h1 style="font-size:1.35rem">${esc(title)}</h1>${sub?`<div class="small muted">${esc(sub)}</div>`:""}</div></div>${pill}</header>`;
 }
 function renderTop(){ const el = document.getElementById("topbar"); if (el){ const tmp=document.createElement("div"); tmp.innerHTML = topBar(el.querySelector("h1").textContent, (el.querySelector(".small")||{}).textContent); el.replaceWith(tmp.firstElementChild);} }
@@ -688,7 +806,8 @@ function settingsView(){
   const st = S.settings;
   return `<div class="card stack"><div class="row between"><div><div class="eyebrow">Exchange</div><div style="font-weight:600">${esc([st.school,st.city,st.country].filter(Boolean).join(", ")||"Not set")}</div><div class="small muted">${st.start?fmtD(st.start,{day:"numeric",month:"short",year:"numeric"})+" – "+fmtD(st.end,{day:"numeric",month:"short",year:"numeric"}):"No dates yet"}</div></div><button class="btn sm" data-act="settings">Edit</button></div>
     <div class="small muted num">Home ${esc(st.home)} · Local ${esc(st.local)} · Budget ${money(st.budget,null,0)} a month</div></div>
-    <div class="card stack"><h3>Where your data lives</h3><div class="small">Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them.</div>
+    ${AUTH.state==="in"?`<div class="card stack"><div class="row between"><div><div class="eyebrow">Signed in</div><div style="font-weight:600">${esc(AUTH.user.displayName||"")}</div><div class="small muted">${esc(AUTH.user.email||"")}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div><div class="small muted">Everything is saved to your account, so you can sign in on another phone and pick up where you left off. Signing out removes the copy on this phone.</div></div>`:""}
+    <div class="card stack"><h3>Backups</h3><div class="small">${AUTH.state==="in"?"Your data is in your account and only you can see it. Shared trips are visible to the friends on them. You can still export a backup file whenever you want one.":"Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them."}</div>
     <div class="row"><button class="btn sm" data-act="export">Export backup</button><button class="btn sm" data-act="import">Import backup</button></div><div class="hint" id="ioMsg"></div></div>
     ${gsCard()}
     <div class="card stack"><h3>Start over</h3><div class="small muted">Removes every expense, trip, class and note.</div><div><button class="btn sm danger" data-act="wipe">${ui.wipeArm?"Tap again to erase everything":"Erase all data"}</button></div></div>`;
@@ -747,7 +866,8 @@ function gsTomb(sec, id){ if (!GS_SECS.includes(sec) || GS.st.base[id]===undefin
 function gsSoon(){ if (!S.settings.gsync || GS.applying) return; clearTimeout(GS.timer); GS.timer = setTimeout(()=>gsSync(false), 2500); }
 
 async function gsSync(manual){
-  const cfg = S.settings.gsync; if (!cfg) return;
+  // With accounts on, only sync once the account's copy has loaded, or stale phone data could overwrite the sheet.
+  const cfg = S.settings.gsync; if (!cfg || AUTH.state!=="local" && !(AUTH.state==="in" && CLOUD.ready)) return;
   if (S.settings.hasExamples){ GS.err = "Clear the example data first, so it doesn't end up in your sheets."; render(); return; }
   if (GS.busy){ GS.again = true; return; }
   GS.busy = true; GS.err = ""; if (manual) render();
@@ -796,7 +916,7 @@ async function gsSync(manual){
       }
     }
     GS.st.last = new Date().toISOString(); GS.st.issues = issues; gsStore();
-    GS.applying = true; cacheLocal(); render(); GS.applying = false;
+    GS.applying = true; cacheLocal(); render(); cloudPush(["settings"].concat(GS_SECS)); GS.applying = false;
     if (manual) toast(failed ? failed+" change"+(failed>1?"s":"")+" didn't save to the sheet" : "Synced"+(changed||ops.length?` · ${changed} in, ${ops.length-failed} out`:""));
   } catch(e){
     GS.err = navigator.onLine===false ? "You're offline. Changes will sync when you're back online." : "Couldn't sync: " + (e && e.message || e);
@@ -934,7 +1054,8 @@ const SH = {status:"off", trips:[], exp:{}, plans:{}, subs:{}, open:null, seg:"p
 function startShared(){
   SH.status = "loading";
   try {
-    db.collection("shared").where("memberUids","array-contains",uid).onSnapshot(snap=>{
+    if (SH.unsub) SH.unsub();
+    SH.unsub = db.collection("shared").where("memberUids","array-contains",uid).onSnapshot(snap=>{
       SH.trips = snap.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id}));
       const ids = new Set(SH.trips.map(t=>t.id));
       SH.trips.forEach(t=>{ if (SH.subs[t.id]) return; const ref = db.collection("shared").doc(t.id);
@@ -1037,6 +1158,9 @@ async function shWrite(sec, tid, rec, del){
 
 /* ---------- render + events ---------- */
 function render(){
+  const gated = !["in","local","offline"].includes(AUTH.state) && !(AUTH.state==="loading" && localOwner());
+  document.querySelector("nav.tabs").hidden = gated;
+  if (gated){ document.getElementById("app").innerHTML = viewGate(); return; }
   renderTabs();
   const v = {home:viewHome, money:viewMoney, travel:viewTravel, school:viewSchool, more:viewMore}[ui.tab] || viewHome;
   document.getElementById("app").innerHTML = v();
@@ -1092,6 +1216,8 @@ document.addEventListener("click", ev=>{
       if (!t){ GS.err = "Paste the secret too."; render(); break; }
       S.settings.gsync = {url:u, token:t}; GS.err = ""; cacheLocal(); render(); gsSync(true); break; }
     case "gsNow": gsSync(true); break;
+    case "signIn": signIn(); break;
+    case "signOut": signOut(); break;
     case "gsOff": delete S.settings.gsync; GS.err = ""; cacheLocal(); render(); toast("Sheets unlinked"); break;
     case "loadEx": loadExamples(); break;
     case "clearEx": clearAll(); toast("Examples cleared"); break;
