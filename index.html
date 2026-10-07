@@ -197,6 +197,8 @@ const I = {
   pack:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 12h8"/></svg>',
   sos:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>',
   pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  house:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>',
   book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 19V5"/></svg>',
   gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>'
 };
@@ -208,7 +210,13 @@ const DEFAULT_RATES_SGD = {SGD:1,EUR:1.50,GBP:1.73,USD:1.30,AUD:0.86,NZD:0.78,CA
 const CATS = ["Rent","Food","Groceries","Transport","Travel","School","Fun","Shopping","Phone & bills","Other"];
 const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#0B8A83","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#0B8A83"};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal"];
+const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal","housing","bucket"];
+// Lists that mirror the WooHoo Google Sheets (see sheets-sync/Code.gs).
+const SHEET_GROUPS = ["Daily","Monthly","Pre-Trip","Travel"];
+const SUB2CAT = {"Accoms":"Travel","Activity":"Fun","Baggage":"Travel","Food":"Food","Gym":"Fun","Haircut":"Other","Housing - Application":"Rent","Housing - Rent":"Rent","Housing - Security Deposit":"Rent","Laundry":"Other","Mobile Data":"Phone & bills","NIL":"Other","Others":"Other","Shopping":"Shopping","Shopping/Health":"Shopping","Transport - Car Hire":"Transport","Transport - Car Rental":"Transport","Transport - Flight":"Travel","Transport - Train/Bus":"Transport","Visa":"School"};
+const CAT2SUB = {"Rent":"Housing - Rent","Food":"Food","Groceries":"Food","Transport":"Transport - Train/Bus","Travel":"Transport - Flight","School":"Others","Fun":"Activity","Shopping":"Shopping","Phone & bills":"Mobile Data","Other":"Others"};
+const DECISIONS = ["hell yeah","uh think harder first","noh"];
+const TIERS = ["Must go","Not must but like to go","Okay if convenient","If got time","Meh"];
 
 const DEFAULT_SETTINGS = {city:"Madrid", country:"Spain", school:"IE University", start:"2027-01-11", end:"2027-05-28", home:"SGD", local:"EUR", myName:"", budget:1500, rates:Object.assign({},DEFAULT_RATES_SGD), hasExamples:false};
 
@@ -224,11 +232,12 @@ let db = null, uid = null; const pending = {}; let flushTimer = null;
 function cacheLocal(){ try { localStorage.setItem("xc.data", JSON.stringify(S)); } catch(e){} }
 function loadLocal(){ try { const raw = localStorage.getItem("xc.data"); if (raw){ const d = JSON.parse(raw); merge(d); return true; } } catch(e){} return false; }
 function merge(d){ SECTIONS.forEach(k=>{ if (d && d[k] !== undefined) S[k] = k==="settings" ? Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), d[k]) : d[k]; }); if (!S.settings.rates) S.settings.rates = Object.assign({},DEFAULT_RATES_SGD); }
-function save(...secs){ cacheLocal(); render(); }
+function save(...secs){ cacheLocal(); render(); if (secs.some(k=>GS_SECS.includes(k))) gsSoon(); }
 async function initStore(){
   loadLocal();
   render();
   initFirebase();
+  gsSync(false);
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 function loadScript(src){ return new Promise((ok,bad)=>{ const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = bad; document.head.appendChild(el); }); }
@@ -292,7 +301,8 @@ const SCHEMA = {
     {k:"cat",label:"Category",type:"select",opts:()=>CATS.map(c=>[c,c]),def:"Food"},{k:"date",label:"Date",type:"date",def:today},
     {k:"note",label:"What was it?",type:"text",full:true},
     {k:"paidBy",label:"Paid by",type:"text",def:"me",hint:"\"me\" or a friend's name"},{k:"splitWith",label:"Split with",type:"text",hint:"Friends' names, comma separated"},
-    {k:"tripId",label:"Trip",type:"select",opts:tripOpts,full:true}]},
+    {k:"tripId",label:"Trip",type:"select",opts:tripOpts,full:true},
+    {k:"group",label:"Sheet type",type:"select",opts:()=>[["","Auto"]].concat(SHEET_GROUPS.map(x=>[x,x])),hint:"Daily, Monthly, Pre-Trip or Travel in your budget sheet"},{k:"city",label:"City / country",type:"text"}]},
   trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"note",label:"Notes",type:"textarea",full:true}]},
   plans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"textarea",full:true}]},
   flights:{title:"Flight", fields:[{k:"from",label:"From (airport code)",type:"text",req:true,upper:true},{k:"to",label:"To (airport code)",type:"text",req:true,upper:true},
@@ -316,6 +326,12 @@ const SCHEMA = {
   sharedExp:{title:"Shared expense", fields:[{k:"note",label:"What was it?",type:"text",req:true,full:true},{k:"amount",label:"Amount",type:"number",req:true},{k:"cur",label:"Currency",type:"select",opts:curOpts,def:()=>{ const t = shTrip(SH.open); return t&&t.cur||"EUR"; }},
     {k:"paidBy",label:"Paid by",type:"select",opts:()=>((shTrip(SH.open)||{}).members||[]).map(m=>[m,m]),def:()=>{ const t = shTrip(SH.open)||{}; return (t.members||[]).find(m=>sameName(m,myName()))||(t.members||[])[0]||""; }},{k:"date",label:"Date",type:"date",def:today},
     {k:"cat",label:"Category",type:"select",opts:()=>CATS.map(c=>[c,c]),def:"Food"},{k:"split",label:"Split between",type:"multi",full:true,opts:()=>((shTrip(SH.open)||{}).members||[]),def:()=>((shTrip(SH.open)||{}).members||[]).slice()}]},
+  housing:{title:"Flat", fields:[{k:"location",label:"Location",type:"text",req:true,full:true},{k:"link",label:"Listing link",type:"text",full:true},
+    {k:"decision",label:"Decision",type:"select",opts:()=>[["","Not decided"]].concat(DECISIONS.map(x=>[x,x]))},{k:"eur",label:"Price per month (EUR)",type:"number"},
+    {k:"metro",label:"Metro to IE (min)",type:"number"},{k:"size",label:"Size (m²)",type:"number"},{k:"beds",label:"Bedrooms",type:"number"},{k:"baths",label:"Toilets",type:"number"},{k:"floor",label:"Floor (ground = 0)",type:"number"},
+    {k:"notes",label:"Other notes",type:"textarea",full:true},{k:"nearby",label:"Nearby stuff",type:"textarea",full:true}]},
+  bucket:{title:"Place to visit", fields:[{k:"country",label:"Country",type:"text",req:true},{k:"city",label:"City",type:"text"},
+    {k:"tierG",label:"My tier",type:"select",opts:()=>[["","No tier"]].concat(TIERS.map(x=>[x,x])),full:true},{k:"start",label:"From",type:"date"},{k:"end",label:"To",type:"date"},{k:"todo",label:"Stuff to do",type:"text",full:true}]},
   journal:{title:"Journal entry", fields:[{k:"date",label:"Date",type:"date",def:today},{k:"title",label:"Title",type:"text",req:true},{k:"text",label:"What happened",type:"textarea",full:true}]}
 };
 
@@ -619,6 +635,8 @@ const MORE = [
   ["wallet","Document wallet",I.wallet,"Passport, visa, insurance, IDs"],
   ["packing","Packing lists",I.pack,"Departure, weekend trips, going home"],
   ["contacts","Emergency info",I.sos,"Embassy, insurance, local numbers"],
+  ["bucket","Bucket list",I.star,"Places to visit, synced with your sheet"],
+  ["housing","Flat hunt",I.house,"Madrid flats, synced with your sheet"],
   ["places","Saved places",I.pin,"Food, study spots, sights"],
   ["journal","Journal",I.book,"Notes on what you got up to"],
   ["settings","Settings & backup",I.gear,"Dates, currencies, rates, export"]
@@ -647,6 +665,20 @@ function viewMore(){
   if (k==="places"){
     body = S.places.length?`<div class="list">${S.places.map(p=>`<div class="item" style="cursor:default"><button class="main" data-act="edit" data-sec="places" data-id="${p.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(p.name)} ${p.visited?'<span class="tag good">Been</span>':""}</div><div class="s">${esc([p.kind,p.city,p.note].filter(Boolean).join(" · "))}</div></button><a class="btn sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.name,p.city].filter(Boolean).join(" "))}" target="_blank" rel="noopener">Map</a></div>`).join("")}</div>`:`<div class="empty">Save places people recommend so you don't lose them in a group chat.</div>`;
   }
+  if (k==="bucket"){
+    const tierRank = t => { const i = TIERS.indexOf(t); return i<0?9:i; };
+    const best = b => Math.min(...[b.tierG,b.tierC,b.yawhong,b.xinhui].map(tierRank));
+    const rows = S.bucket.slice().sort((a,b)=>best(a)-best(b) || (a.country||"").localeCompare(b.country||"") || (a.city||"").localeCompare(b.city||""));
+    const who = b => [["You",b.tierG],["C",b.tierC],["Yawhong",b.yawhong],["Xinhui",b.xinhui]].filter(x=>x[1]).map(x=>`<span class="tag${x[1]==="Must go"?" stamp":""}">${esc(x[0])}: ${esc(x[1])}</span>`).join(" ");
+    body = gsHint() + (rows.length?`<div class="list">${rows.map(b=>`<div class="item" style="cursor:default"><button class="main" data-act="edit" data-sec="bucket" data-id="${b.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc([b.city,b.country].filter(Boolean).join(", "))}</div><div class="s">${esc([b.start&&b.end?fmtD(b.start)+" – "+fmtD(b.end):b.start?fmtD(b.start):"",b.todo].filter(Boolean).join(" · "))}</div>${who(b)?`<div class="row" style="gap:4px;margin-top:4px">${who(b)}</div>`:""}</button><a class="btn sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([b.city,b.country].filter(Boolean).join(" "))}" target="_blank" rel="noopener">Map</a></div>`).join("")}</div>`:`<div class="empty">Countries and cities you want to see. Link your Places to Visit sheet in Settings to pull them in.</div>`);
+  }
+  if (k==="housing"){
+    const rank = d => d==="hell yeah"?0:d==="uh think harder first"?1:d==="noh"?3:2;
+    const has = x => x!==""&&x!=null;
+    const rows = S.housing.slice().sort((a,b)=>rank(a.decision)-rank(b.decision) || (Number(a.eur)||1e9)-(Number(b.eur)||1e9));
+    const tag = d => !d?"":`<span class="tag${d==="hell yeah"?" good":d==="noh"?" bad":" stamp"}">${esc(d)}</span>`;
+    body = gsHint() + (rows.length?`<div class="list">${rows.map(h=>`<div class="item" style="cursor:default"><button class="main" data-act="edit" data-sec="housing" data-id="${h.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0"><div class="t">${esc(h.location||"Flat")} ${tag(h.decision)}</div><div class="s num">${esc([has(h.eur)?"€"+h.eur+"/mo":"",h.sgdPP?"S$"+Math.round(h.sgdPP)+" pp":"",has(h.metro)?h.metro+" min to IE":"",h.size?h.size+" m²":"",h.beds?h.beds+" bed":"",h.baths?h.baths+" toilet":""].filter(Boolean).join(" · "))}</div>${h.notes?`<div class="s" style="white-space:pre-wrap">${esc(String(h.notes).slice(0,140))}${String(h.notes).length>140?"…":""}</div>`:""}</button>${/^https?:/.test(h.link||"")?`<a class="btn sm" href="${esc(h.link)}" target="_blank" rel="noopener">Open</a>`:""}</div>`).join("")}</div>`:`<div class="empty">Flats you're considering. Link your Madrid Exchange Planning sheet in Settings to pull them in.</div>`);
+  }
   if (k==="journal"){
     body = S.journal.length?`<div class="stack">${S.journal.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(j=>`<button class="card" data-act="edit" data-sec="journal" data-id="${j.id}" style="text-align:left;cursor:pointer"><div class="eyebrow">${fmtDW(j.date)}</div><h3>${esc(j.title)}</h3><div class="small" style="white-space:pre-wrap;margin-top:4px">${esc(j.text||"")}</div></button>`).join("")}</div>`:`<div class="empty">A few lines a week is enough. You'll be glad you did.</div>`;
   }
@@ -658,8 +690,142 @@ function settingsView(){
     <div class="small muted num">Home ${esc(st.home)} · Local ${esc(st.local)} · Budget ${money(st.budget,null,0)} a month</div></div>
     <div class="card stack"><h3>Where your data lives</h3><div class="small">Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them.</div>
     <div class="row"><button class="btn sm" data-act="export">Export backup</button><button class="btn sm" data-act="import">Import backup</button></div><div class="hint" id="ioMsg"></div></div>
+    ${gsCard()}
     <div class="card stack"><h3>Start over</h3><div class="small muted">Removes every expense, trip, class and note.</div><div><button class="btn sm danger" data-act="wipe">${ui.wipeArm?"Tap again to erase everything":"Erase all data"}</button></div></div>`;
 }
+
+/* ---------- Google Sheets two-way sync ----------
+   Talks to the Apps Script web app in sheets-sync/Code.gs. Each sync pulls every linked
+   tab, compares each row with the app and with the last synced copy (GS.st.base), and
+   sends back only what changed in the app. If both sides changed the same row, the sheet wins.
+   Rows are only deleted from a sheet when they were deleted in the app (tombstones), so
+   erasing the app or importing a backup never empties a sheet. */
+const GS_SECS = ["expenses","housing","bucket"];
+const GS_FIELDS = {
+  expenses:{date:"date",group:"text",sub:"text",city:"text",item:"text",eur:"num",sgd:"num",remarks:"text"},
+  housing:{decision:"text",link:"text",eur:"num",location:"text",metro:"num",size:"num",beds:"num",baths:"num",floor:"num",notes:"text",nearby:"text"},
+  bucket:{tierG:"text",country:"text",city:"text",start:"date",end:"date",todo:"text"}
+};
+const GS = {busy:false, again:false, timer:null, err:"", st:{base:{}, tomb:{}, last:null, issues:{}}};
+try { const raw = localStorage.getItem("xc.sync"); if (raw) Object.assign(GS.st, JSON.parse(raw)); } catch(e){}
+function gsStore(){ try { localStorage.setItem("xc.sync", JSON.stringify(GS.st)); } catch(e){} }
+const r2 = x => Math.round(x*100)/100;
+function gsNorm(type, x){
+  if (type==="num"){ if (x===""||x==null) return ""; const n = Number(x); return isNaN(n) ? "" : r2(n); }
+  return String(x==null?"":x).replace(/\r\n?/g,"\n");
+}
+function gsHash(sec, v){ const f = GS_FIELDS[sec]; return JSON.stringify(Object.keys(f).map(k=>gsNorm(f[k], v[k]))); }
+function gsAutoGroup(e){
+  if (e.date && S.settings.start && e.date < S.settings.start) return "Pre-Trip";
+  if (e.tripId || e.cat==="Travel") return "Travel";
+  if (e.cat==="Rent" || e.cat==="Phone & bills") return "Monthly";
+  return "Daily";
+}
+// app item -> the sheet's columns
+function gsToV(sec, it){
+  if (sec!=="expenses"){ const v = {}; Object.keys(GS_FIELDS[sec]).forEach(k=>v[k]=it[k]==null?"":it[k]); return v; }
+  const amt = Number(it.amount)||0; let eur = 0, sgd = 0;
+  if (it.cur==="EUR") eur = amt;
+  else if (it.cur==="SGD"){ sgd = amt; eur = Number(it.eurRef)||0; }
+  else eur = r2(amt*rate(it.cur)/rate("EUR"));
+  const sub = it.sub!==undefined && (SUB2CAT[it.sub]||"Other")===it.cat ? it.sub : (CAT2SUB[it.cat]||"Others");
+  return {date:it.date||"", group:it.group||gsAutoGroup(it), sub, city:it.city||"", item:it.note||"", eur, sgd, remarks:it.remarks||""};
+}
+// sheet row -> app item (keeps app-only fields like trip, split and paid by)
+function gsFromV(sec, row, old){
+  const it = Object.assign({}, old||{id:row.id}, row.ro||{});
+  if (sec!=="expenses"){ Object.assign(it, row.v); return it; }
+  const v = row.v, eur = Number(v.eur)||0, sgd = Number(v.sgd)||0;
+  if (sgd){ it.amount = sgd; it.cur = "SGD"; it.eurRef = eur||undefined; }
+  else { it.amount = eur; it.cur = "EUR"; delete it.eurRef; }
+  Object.assign(it, {date:v.date, group:v.group, sub:v.sub, cat:SUB2CAT[v.sub]||"Other", city:v.city, note:v.item, remarks:v.remarks});
+  if (!old){ it.paidBy = "me"; it.splitWith = ""; it.tripId = ""; }
+  return it;
+}
+const gsSyncable = (sec, it) => !(sec==="expenses" && it.settle);
+function gsTomb(sec, id){ if (!GS_SECS.includes(sec) || GS.st.base[id]===undefined) return; (GS.st.tomb[sec] = GS.st.tomb[sec]||[]).push(id); gsStore(); }
+function gsSoon(){ if (!S.settings.gsync || GS.applying) return; clearTimeout(GS.timer); GS.timer = setTimeout(()=>gsSync(false), 2500); }
+
+async function gsSync(manual){
+  const cfg = S.settings.gsync; if (!cfg) return;
+  if (S.settings.hasExamples){ GS.err = "Clear the example data first, so it doesn't end up in your sheets."; render(); return; }
+  if (GS.busy){ GS.again = true; return; }
+  GS.busy = true; GS.err = ""; if (manual) render();
+  try {
+    const res = await fetch(cfg.url + (cfg.url.includes("?")?"&":"?") + "t=" + encodeURIComponent(cfg.token) + "&_=" + Date.now(), {redirect:"follow"});
+    const pull = await res.json();
+    if (!pull.ok) throw new Error(pull.error||"The sheet script refused the request");
+    if (pull.eurSgd > 0) S.settings.rates.EUR = pull.eurSgd;
+    const base = GS.st.base, ops = [], issues = {};
+    let changed = 0;
+    for (const sec of GS_SECS){
+      const tab = pull.tabs && pull.tabs[sec];
+      if (!tab || tab.error){ issues[sec] = tab ? tab.error : "Not returned"; continue; }
+      const tomb = new Set(GS.st.tomb[sec]||[]);
+      const inSheet = new Set(tab.rows.map(r=>r.id));
+      const list = S[sec] = S[sec]||[];
+      for (const row of tab.rows){
+        const s = gsHash(sec, row.v), b = base[row.id];
+        const i = list.findIndex(x=>x.id===row.id);
+        if (i>=0){
+          const a = gsHash(sec, gsToV(sec, list[i]));
+          if (a===s){ base[row.id] = s; Object.assign(list[i], row.ro||{}); }
+          else if (s!==b){ list[i] = gsFromV(sec, row, list[i]); base[row.id] = s; changed++; } // sheet changed (or both did: sheet wins)
+          else ops.push({sec, op:"upsert", id:row.id, v:gsToV(sec, list[i])});                                       // only the app changed
+        } else if (tomb.has(row.id)) ops.push({sec, op:"delete", id:row.id});
+        else { list.push(gsFromV(sec, row, null)); base[row.id] = s; changed++; }
+      }
+      for (const it of list.slice()){
+        if (inSheet.has(it.id) || !gsSyncable(sec, it)) continue;
+        const b = base[it.id];
+        if (b!==undefined && gsHash(sec, gsToV(sec, it))===b){ S[sec] = S[sec].filter(x=>x.id!==it.id); delete base[it.id]; changed++; } // deleted in the sheet
+        else ops.push({sec, op:"upsert", id:it.id, v:gsToV(sec, it)});                                                                   // new in the app (or edited after the sheet row went)
+      }
+      GS.st.tomb[sec] = [...tomb].filter(id=>inSheet.has(id));
+    }
+    let failed = 0;
+    if (ops.length){
+      const pr = await fetch(cfg.url, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify({t:cfg.token, ops}), redirect:"follow"});
+      const out = await pr.json();
+      if (!out.ok) throw new Error(out.error||"The sheet script refused the changes");
+      const okIds = new Set((out.results||[]).filter(r=>r.ok).map(r=>r.id));
+      for (const o of ops){
+        if (!okIds.has(o.id)){ failed++; const e = (out.results||[]).find(r=>r.id===o.id); if (e && e.error) issues[o.sec] = e.error; continue; }
+        if (o.op==="upsert") base[o.id] = gsHash(o.sec, o.v);
+        else { delete base[o.id]; GS.st.tomb[o.sec] = (GS.st.tomb[o.sec]||[]).filter(x=>x!==o.id); }
+      }
+    }
+    GS.st.last = new Date().toISOString(); GS.st.issues = issues; gsStore();
+    GS.applying = true; cacheLocal(); render(); GS.applying = false;
+    if (manual) toast(failed ? failed+" change"+(failed>1?"s":"")+" didn't save to the sheet" : "Synced"+(changed||ops.length?` · ${changed} in, ${ops.length-failed} out`:""));
+  } catch(e){
+    GS.err = navigator.onLine===false ? "You're offline. Changes will sync when you're back online." : "Couldn't sync: " + (e && e.message || e);
+    render();
+  } finally {
+    GS.busy = false;
+    if (GS.again){ GS.again = false; gsSoon(); }
+  }
+}
+function gsHint(){
+  if (!S.settings.gsync) return "";
+  return `<div class="row between small muted"><span>${GS.busy?"Syncing with Google Sheets…":GS.st.last?"Synced with Google Sheets "+relTime(GS.st.last):"Linked to Google Sheets"}</span><button class="btn ghost sm" data-act="gsNow">Sync now</button></div>`;
+}
+function relTime(iso){ const m = Math.round((Date.now()-new Date(iso))/60000); return m<1?"just now":m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":fmtD(iso.slice(0,10)); }
+function gsCard(){
+  const c = S.settings.gsync; const names = {expenses:"Budget",housing:"Flat hunt",bucket:"Bucket list"};
+  const issues = Object.entries(GS.st.issues||{}).map(([k,v])=>`<div class="small" style="color:var(--warn)">${esc(names[k])}: ${esc(v)}</div>`).join("");
+  if (!c) return `<div class="card stack"><h3>Google Sheets</h3><div class="small">Link your WooHoo sheets so expenses, flats and your bucket list stay the same in both places. Set up the sheet script first (see the README on GitHub), then paste its link and secret here.</div>
+    <div class="fields"><div class="field full"><label for="gs_url">Web app link</label><input id="gs_url" type="url" placeholder="https://script.google.com/macros/s/…/exec"></div><div class="field full"><label for="gs_tok">Secret</label><input id="gs_tok" type="text" autocomplete="off"></div></div>
+    ${GS.err?`<div class="small" style="color:var(--bad)">${esc(GS.err)}</div>`:""}<div><button class="btn sm primary" data-act="gsSave">Link and sync</button></div></div>`;
+  return `<div class="card stack"><div class="row between"><h3>Google Sheets</h3><span class="tag good">Linked</span></div>
+    <div class="small">Expenses ↔ Input (Actual), Flat hunt ↔ Accommodations, Bucket list ↔ Places to Visit. Syncs when you open the app and a few seconds after you change something. If a row changed in both places, the sheet's version is kept.</div>
+    <div class="small muted">${GS.busy?"Syncing…":GS.st.last?"Last synced "+relTime(GS.st.last):"Not synced yet"}</div>${issues}
+    ${GS.err?`<div class="small" style="color:var(--bad)">${esc(GS.err)}</div>`:""}
+    <div class="row"><button class="btn sm" data-act="gsNow">Sync now</button><button class="btn sm ghost" data-act="gsOff">Unlink</button></div></div>`;
+}
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible") gsSync(false); });
+window.addEventListener("online", ()=>gsSync(false));
+setInterval(()=>{ if (document.visibilityState==="visible") gsSync(false); }, 120000);
 
 /* ---------- examples ---------- */
 function loadExamples(){
@@ -891,7 +1057,7 @@ document.addEventListener("click", ev=>{
         const subs = sec==="sharedTrips" ? (SH.exp[id]||[]).map(e=>shWrite("sharedExp",id,e,true)).concat((SH.plans[id]||[]).map(p=>shWrite("sharedPlans",id,p,true))) : [];
         if (sec==="sharedTrips") SH.open = null;
         // remove a trip's expenses and plans first: once the trip is gone, nobody is a member any more
-        Promise.all(subs).then(()=>shWrite(sec, tid, {id}, true)).then(ok=>ok&&toast("Deleted")); } else { const sec = sheet.sec; S[sec] = S[sec].filter(x=>x.id!==sheet.id); if (sec==="trips"){ S.plans = S.plans.filter(p=>p.tripId!==sheet.id); ui.openTrip = null; } closeSheet(); save(sec,"plans"); toast("Deleted"); } break;
+        Promise.all(subs).then(()=>shWrite(sec, tid, {id}, true)).then(ok=>ok&&toast("Deleted")); } else { const sec = sheet.sec; gsTomb(sec, sheet.id); S[sec] = S[sec].filter(x=>x.id!==sheet.id); if (sec==="trips"){ S.plans = S.plans.filter(p=>p.tripId!==sheet.id); ui.openTrip = null; } closeSheet(); save(sec,"plans"); toast("Deleted"); } break;
     case "settings": openSheet("settings"); break;
     case "month": { const [y,m] = ui.month.split("-").map(Number); const d = new Date(y, m-1+Number(ds.d), 1); ui.month = d.getFullYear()+"-"+pad(d.getMonth()+1); render(); break; }
     case "tseg": ui.travelSeg = ds.k; ui.openTrip = null; SH.open = null; render(); break;
@@ -921,6 +1087,12 @@ document.addEventListener("click", ev=>{
     case "iam": S.settings.myName = ds.n; save("settings"); toast("Got it, you're "+ds.n); break;
     case "shPaid": { const tr = shTrip(SH.open); const amt = Math.round(Number(ds.amt)*100)/100; shWrite("sharedExp", SH.open, {id:uidGen(), transfer:true, from:ds.from, to:ds.to, amount:amt, cur:tr.cur||"EUR", tripAmt:amt, date:today(), by:myName()}).then(ok=>ok&&toast("Marked as paid")); break; }
     case "semester": { const s = SEMESTERS[Number(ds.i)]; document.getElementById("s_start").value = s[1]; document.getElementById("s_end").value = s[2]; break; }
+    case "gsSave": { const u = document.getElementById("gs_url").value.trim(), t = document.getElementById("gs_tok").value.trim();
+      if (!/^https:\/\/script\.google\.com\//.test(u)){ GS.err = "That doesn't look like the web app link. It starts with https://script.google.com/macros/s/"; render(); break; }
+      if (!t){ GS.err = "Paste the secret too."; render(); break; }
+      S.settings.gsync = {url:u, token:t}; GS.err = ""; cacheLocal(); render(); gsSync(true); break; }
+    case "gsNow": gsSync(true); break;
+    case "gsOff": delete S.settings.gsync; GS.err = ""; cacheLocal(); render(); toast("Sheets unlinked"); break;
     case "loadEx": loadExamples(); break;
     case "clearEx": clearAll(); toast("Examples cleared"); break;
     case "export": exportData(); break;
