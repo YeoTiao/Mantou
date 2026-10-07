@@ -75,6 +75,7 @@ h3{font-size:1rem}
 .gbtn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;font-size:1rem}
 .gbtn svg{background:#fff;border-radius:4px;padding:2px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.mapbox{height:62vh;min-height:320px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--sunk);z-index:0}
 .save-pill{font-size:.75rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .save-pill.ok{background:var(--accent-soft);color:var(--accent)}
 
@@ -194,6 +195,7 @@ nav.tabs button:focus-visible{outline:2px solid var(--accent)}
 <main class="wrap" id="app" aria-live="polite"></main>
 <div id="sheetRoot"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
+<input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
 
 <script>
 (function(){
@@ -216,9 +218,9 @@ const I = {
 };
 
 /* ---------- constants ---------- */
-const CURRENCIES = ["SGD","EUR","GBP","USD","AUD","NZD","CAD","CHF","SEK","NOK","DKK","JPY","KRW","CNY","HKD","TWD","THB","MYR","IDR","INR"];
+const CURRENCIES = ["SGD","EUR","GBP","USD","CHF","CZK","HUF","PLN","SEK","NOK","DKK","ISK","TRY","RON","BGN","MAD","AUD","NZD","CAD","JPY","KRW","CNY","HKD","TWD","THB","MYR","IDR","INR"];
 // Approximate value of 1 unit in SGD. Editable in Settings.
-const DEFAULT_RATES_SGD = {SGD:1,EUR:1.50,GBP:1.73,USD:1.30,AUD:0.86,NZD:0.78,CAD:0.95,CHF:1.62,SEK:0.135,NOK:0.125,DKK:0.20,JPY:0.0088,KRW:0.00095,CNY:0.18,HKD:0.167,TWD:0.041,THB:0.039,MYR:0.30,IDR:0.00008,INR:0.0155};
+const DEFAULT_RATES_SGD = {CZK:0.057,HUF:0.0036,PLN:0.33,ISK:0.0095,TRY:0.033,RON:0.29,BGN:0.74,MAD:0.13,SGD:1,EUR:1.50,GBP:1.73,USD:1.30,AUD:0.86,NZD:0.78,CAD:0.95,CHF:1.62,SEK:0.135,NOK:0.125,DKK:0.20,JPY:0.0088,KRW:0.00095,CNY:0.18,HKD:0.167,TWD:0.041,THB:0.039,MYR:0.30,IDR:0.00008,INR:0.0155};
 const CATS = ["Rent","Food","Groceries","Transport","Travel","School","Fun","Shopping","Phone & bills","Other"];
 const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#0B8A83","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#0B8A83"};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -250,6 +252,7 @@ async function initStore(){
   render();
   initFirebase();
   gsSync(false);
+  refreshRates(false); setTimeout(runChecks, 4000);
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 function loadScript(src){ return new Promise((ok,bad)=>{ const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = bad; document.head.appendChild(el); }); }
@@ -562,7 +565,7 @@ function renderSheet(){
       if (sec==="sharedTrips"){ out.members = [...new Set(String(out.members).split(",").map(x=>x.trim()).filter(Boolean))]; if (!rec){ out.createdAt = Date.now(); out.memberUids = [uid]; out.id = db.collection("shared").doc().id; } }
       const tid = sec==="sharedTrips" ? out.id : SH.open;
       if (sec==="sharedExp"){ const tr = shTrip(tid); out.tripAmt = Math.round(Number(out.amount)*rate(out.cur)/rate(tr.cur||"EUR")*100)/100; }
-      if (sec==="sharedPlans" && !rec) out.by = myName();
+      if ((sec==="sharedPlans" || sec==="sharedExp") && !rec){ out.by = myName(); out.createdAt = Date.now(); }
       closeSheet(); shWrite(sec, tid, out).then(ok=>{ if (ok){ toast(rec?"Saved":"Added"); if (sec==="sharedTrips" && !rec){ SH.open = out.id; SH.seg = "plan"; SH.waitUntil = Date.now()+5000; render(); } } });
       return;
     }
@@ -709,7 +712,8 @@ function viewMoney(){
   return topBar("Money", `All amounts in ${S.settings.home} unless shown`) + examplesBanner() +
     `<div class="row between"><button class="btn sm" data-act="month" data-d="-1" aria-label="Previous month">‹</button><h2>${esc(label)}</h2><button class="btn sm" data-act="month" data-d="1" aria-label="Next month">›</button></div>` +
     budgetCard(m,false) +
-    `<button class="btn primary" data-act="add" data-sec="expenses">Add expense</button>` +
+    `<div class="row" style="gap:8px"><button class="btn primary" data-act="add" data-sec="expenses" style="flex:1">Add expense</button><button class="btn" data-act="scan" style="flex:1">📷 Scan receipt</button></div>` +
+    (OCR.busy?`<div class="banner"><span id="ocrMsg">${esc(OCR.msg)}</span></div>`:"") +
     `<section class="stack"><h2>Expenses</h2>${rows?`<div class="list">${rows}</div>`:`<div class="empty">No expenses logged in ${esc(label)}.</div>`}</section>` +
     `<section class="stack"><h2>Split with friends</h2>${balH}</section>` +
     `<div class="small muted num">Whole exchange so far: ${money(total,null,0)}${avg}</div>`;
@@ -817,6 +821,7 @@ const MORE = [
   ["wallet","Document wallet",I.wallet,"Passport, visa, insurance, IDs"],
   ["packing","Packing lists",I.pack,"Departure, weekend trips, going home"],
   ["contacts","Emergency info",I.sos,"Embassy, insurance, local numbers"],
+  ["map","Map",I.pin,"Bucket list, places, flats and trips"],
   ["bucket","Bucket list",I.star,"Places to visit, synced with your sheet"],
   ["housing","Flat hunt",I.house,"Madrid flats, synced with your sheet"],
   ["places","Saved places",I.pin,"Food, study spots, sights"],
@@ -864,6 +869,7 @@ function viewMore(){
   if (k==="journal"){
     body = S.journal.length?`<div class="stack">${S.journal.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(j=>`<button class="card" data-act="edit" data-sec="journal" data-id="${j.id}" style="text-align:left;cursor:pointer"><div class="eyebrow">${fmtDW(j.date)}</div><h3>${esc(j.title)}</h3><div class="small" style="white-space:pre-wrap;margin-top:4px">${esc(j.text||"")}</div></button>`).join("")}</div>`:`<div class="empty">A few lines a week is enough. You'll be glad you did.</div>`;
   }
+  if (k==="map") return back + topBar("Map", "Everything you've saved, on one map") + viewMap();
   return back + topBar(meta[1], meta[3]) + `<button class="btn primary" data-act="add" data-sec="${k}">Add</button>` + body;
 }
 function settingsView(){
@@ -874,6 +880,11 @@ function settingsView(){
     ${UNAME.editing?nameForm(false):`<div><button class="btn sm ghost" data-act="unameEdit">Change username</button></div>`}<div class="small muted">Everything is saved to your account, so you can sign in on another phone and pick up where you left off. Signing out removes the copy on this phone.</div></div>`:""}
     <div class="card stack"><h3>Backups</h3><div class="small">${AUTH.state==="in"?"Your data is in your account and only you can see it. Shared trips are visible to the friends on them. You can still export a backup file whenever you want one.":"Your budget, timetable, documents and notes are saved on this device only, and nobody else can see them. Export a backup now and then, and import it to move to a new phone. Shared trips are stored online so your friends can see them."}</div>
     <div class="row"><button class="btn sm" data-act="export">Export backup</button><button class="btn sm" data-act="import">Import backup</button></div><div class="hint" id="ioMsg"></div></div>
+    <div class="card stack"><div class="row between"><h3>Notifications</h3>${S.settings.notify&&notifyOn()?`<button class="btn sm ghost" data-act="notifyOff">Turn off</button>`:`<button class="btn sm primary" data-act="notifyOn">Turn on</button>`}</div>
+      <div class="small muted">Budget at 80% and 100%, deadlines due within a day, trips and flights tomorrow, and bills friends add to shared trips. They show while Mantou is open or in the background.</div></div>
+    <div class="card stack"><div class="row between"><h3>Exchange rates</h3><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-act="autoRates"${S.settings.autoRates===false?"":" checked"}> Update daily</label></div>
+      <div class="small muted">${S.settings.autoRates===false?"You're typing rates in yourself (Exchange details › Exchange rates).":S.settings.ratesDate?`European Central Bank rates from ${esc(S.settings.ratesDate)}. 1 EUR = ${esc(String(S.settings.rates.EUR))} SGD.`:"Rates come from the European Central Bank once a day."}</div>
+      ${S.settings.autoRates===false?"":`<div><button class="btn sm" data-act="ratesNow">Update now</button></div>`}</div>
     ${gsCard()}
     <div class="card stack"><h3>Start over</h3><div class="small muted">Removes every expense, trip, class and note.</div><div><button class="btn sm danger" data-act="wipe">${ui.wipeArm?"Tap again to erase everything":"Erase all data"}</button></div></div>`;
 }
@@ -940,7 +951,6 @@ async function gsSync(manual){
     const res = await fetch(cfg.url + (cfg.url.includes("?")?"&":"?") + "t=" + encodeURIComponent(cfg.token) + "&_=" + Date.now(), {redirect:"follow"});
     const pull = await res.json();
     if (!pull.ok) throw new Error(pull.error||"The sheet script refused the request");
-    if (pull.eurSgd > 0) S.settings.rates.EUR = pull.eurSgd;
     const base = GS.st.base, ops = [], issues = {};
     let changed = 0;
     for (const sec of GS_SECS){
@@ -1012,6 +1022,169 @@ document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState
 window.addEventListener("online", ()=>gsSync(false));
 setInterval(()=>{ if (document.visibilityState==="visible") gsSync(false); }, 120000);
 
+/* ---------- live exchange rates ----------
+   Daily ECB reference rates from frankfurter.app (free, no key). Stored as "1 unit in SGD"
+   like the hand-typed ones, so the rest of the app doesn't change. Currencies the ECB doesn't
+   publish (TWD, MAD) keep their typed-in rate. */
+async function refreshRates(force){
+  const st = S.settings; if (st.autoRates===false) return;
+  if (!force && st.ratesAt && st.ratesAt.slice(0,10)===today()) return;
+  try {
+    let r = await fetch("https://api.frankfurter.dev/v1/latest?base=SGD").catch(()=>null);
+    if (!r || !r.ok) r = await fetch("https://api.frankfurter.app/latest?from=SGD"); if (!r.ok) throw 0;
+    const j = await r.json(); if (!j || !j.rates) throw 0;
+    Object.entries(j.rates).forEach(([c,v])=>{ if (v>0 && CURRENCIES.includes(c)) st.rates[c] = Math.round(1/v*1e6)/1e6; });
+    st.rates.SGD = 1; st.ratesAt = new Date().toISOString(); st.ratesDate = j.date;
+    save("settings"); if (force) toast("Rates updated ("+j.date+")");
+  } catch(e){ if (force) toast("Couldn't fetch rates. Are you online?"); }
+}
+
+/* ---------- receipt scanning ----------
+   Runs Tesseract OCR in the browser (nothing is uploaded), then guesses the total, date,
+   shop and category, and opens a prefilled expense for the person to check. */
+const OCR = {busy:false, pct:0, msg:""};
+function scanReceipt(){ const inp = document.getElementById("receiptFile"); inp.value = ""; inp.click(); }
+async function shrinkImage(file){
+  const img = await new Promise((ok,bad)=>{ const i = new Image(); i.onload = ()=>ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });
+  const k = Math.min(1, 1600/Math.max(img.width, img.height)); const c = document.createElement("canvas");
+  c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+  const x = c.getContext("2d"); x.filter = "grayscale(1) contrast(1.4)"; x.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src);
+  return c;
+}
+async function onReceipt(file){
+  if (!file || OCR.busy) return;
+  OCR.busy = true; OCR.pct = 0; OCR.msg = "Reading the receipt…"; render();
+  try {
+    if (!window.Tesseract) await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+    const canvas = await shrinkImage(file);
+    const res = await Tesseract.recognize(canvas, "spa+eng", {logger:m=>{ if (m.status==="recognizing text"){ OCR.pct = Math.round(m.progress*100); OCR.msg = "Reading the receipt… "+OCR.pct+"%"; const el = document.getElementById("ocrMsg"); if (el) el.textContent = OCR.msg; } else if (/loading/.test(m.status)){ OCR.msg = "Getting the scanner ready (first time only)…"; const el = document.getElementById("ocrMsg"); if (el) el.textContent = OCR.msg; } }});
+    const g = parseReceipt(res.data.text||"");
+    OCR.busy = false; render();
+    if (!g.amount) toast("Couldn't find the total. Fill it in yourself.");
+    openSheet("expenses", null, Object.assign({cur:S.settings.local||"EUR"}, g));
+  } catch(e){ OCR.busy = false; render(); toast("Couldn't read that photo. Try again in better light."); }
+}
+const toNum = s => { s = s.replace(/\s/g,""); if (/,\d{2}$/.test(s)) s = s.replace(/\./g,"").replace(",","."); else s = s.replace(/,/g,""); return Number(s); };
+function parseReceipt(text){
+  const lines = text.split(/\n/).map(l=>l.trim()).filter(Boolean), out = {};
+  const amt = /(\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2})(?!\d)/g;
+  const totalRe = /total|importe|a pagar|tarjeta|efectivo|amount due|summe|totale|montant/i, skipRe = /sub ?total|base imp|i\.?v\.?a|iva\b|vat|tax|cambio|change|descuento/i;
+  let best = null;
+  for (const l of lines){ if (totalRe.test(l) && !skipRe.test(l)){ const m = l.match(amt); if (m){ const v = toNum(m[m.length-1]); if (v>0 && (best==null || v>=best)) best = v; } } }
+  if (best==null){ const all = (text.match(amt)||[]).map(toNum).filter(v=>v>0 && v<5000); if (all.length) best = Math.max(...all); }
+  if (best!=null) out.amount = Math.round(best*100)/100;
+  const d = text.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
+  if (d){ let [_, dd, mm, yy] = d; yy = yy.length===2 ? "20"+yy : yy; const iso = yy+"-"+pad(+mm)+"-"+pad(+dd); if (+mm>=1 && +mm<=12 && +dd>=1 && +dd<=31 && iso<=addDays(today(),1)) out.date = iso; }
+  const shop = lines.find(l=>(l.match(/[A-Za-zÀ-ÿ]/g)||[]).length>=4 && !/^(factura|ticket|fecha|nif|cif|tel|c\/|calle)/i.test(l));
+  if (shop) out.note = shop.replace(/[^\wÀ-ÿ&' .\-]/g,"").replace(/\s+/g," ").trim().slice(0,40).replace(/\b\w/g,c=>c.toUpperCase()).replace(/\B\w+/g,w=>w.toLowerCase());
+  const t = text.toLowerCase();
+  out.cat = /mercadona|carrefour|lidl|\bdia\b|aldi|supermercado|alcampo|eroski|hipercor/.test(t) ? "Groceries"
+    : /renfe|metro|\bemt\b|uber|cabify|bolt|taxi|alsa|ouigo|iryo|gasolin/.test(t) ? "Transport"
+    : /restaurante|\bbar\b|caf[eé]|cafeter|burger|pizza|tapas|cerveza|men[uú] del d/.test(t) ? "Food"
+    : /farmacia|zara|primark|h&m|decathlon|fnac|el corte/.test(t) ? "Shopping" : "Other";
+  if (/£/.test(text)) out.cur = "GBP"; else if (/€|\beur\b/i.test(text)) out.cur = "EUR";
+  return out;
+}
+
+/* ---------- notifications ----------
+   Phone notifications while the app is open or in the background: budget at 80% / 100%,
+   deadlines due within a day, trips and flights tomorrow, and bills friends add to shared trips.
+   Each one fires once (keys kept in xc.notified). Closed-app push would need a server. */
+const NOTE = {seen:null};
+function notifyOn(){ return S.settings.notify && "Notification" in window && Notification.permission==="granted"; }
+async function enableNotify(){
+  if (!("Notification" in window)){ toast(/iPhone|iPad/.test(navigator.userAgent) ? "On iPhone, add Mantou to your home screen first, then turn this on from there." : "This browser can't show notifications."); return; }
+  const p = await Notification.requestPermission();
+  if (p==="granted"){ S.settings.notify = true; save("settings"); toast("Notifications on"); runChecks(); notify("Mantou notifications are on", "You'll hear about budgets, deadlines, trips and shared bills.", "hello"); }
+  else { S.settings.notify = false; save("settings"); toast("Notifications are blocked. Allow them in your phone's settings for this site."); }
+}
+function sent(){ try { return JSON.parse(localStorage.getItem("xc.notified")||"{}"); } catch(e){ return {}; } }
+async function notify(title, body, key){
+  const s = sent(); if (key && s[key]) return; if (key){ s[key] = Date.now(); try { localStorage.setItem("xc.notified", JSON.stringify(s)); } catch(e){} }
+  if (!notifyOn()) return;
+  const opts = {body, icon:"icons/mantou-192.png", badge:"icons/mantou-192.png", tag:key||undefined};
+  try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) return reg.showNotification(title, opts); } catch(e){}
+  try { new Notification(title, opts); } catch(e){}
+}
+function runChecks(){
+  if (!S.settings.notify || S.settings.hasExamples) return;
+  const t = today(), tm = addDays(t,1), m = t.slice(0,7), st = S.settings;
+  if (st.budget>0){ const spent = monthExpenses(m).reduce((a,e)=>a+myShare(e),0), pct = spent/st.budget;
+    if (pct>=1) notify("Over budget this month", `You've spent ${money(spent,null,0)} of your ${money(st.budget,null,0)} budget.`, "b100-"+m);
+    else if (pct>=0.8) notify("80% of this month's budget used", `${money(st.budget-spent,null,0)} left for the rest of the month.`, "b80-"+m); }
+  S.deadlines.filter(d=>!d.done && d.due>=t && d.due<=tm).forEach(d=>notify(d.due===t?"Due today":"Due tomorrow", [d.title,d.course].filter(Boolean).join(" · "), "dl-"+d.id+"-"+d.due));
+  S.trips.filter(x=>x.start===tm).forEach(x=>notify("Trip tomorrow: "+x.name, x.dest||"Have a good one!", "tr-"+x.id+"-"+x.start));
+  S.flights.filter(f=>(f.dep||"").slice(0,10)===tm).forEach(f=>notify("Flight tomorrow: "+f.from+" → "+f.to, [fmtTime(f.dep), f.airline, f.num].filter(Boolean).join(" · "), "fl-"+f.id+"-"+f.dep));
+  // bills friends added to shared trips
+  let seen; try { seen = JSON.parse(localStorage.getItem("xc.seenExp")||"null"); } catch(e){ seen = null; }
+  const first = !seen; seen = seen || {};
+  SH.trips.forEach(tr=>(SH.exp[tr.id]||[]).forEach(e=>{
+    if (seen[e.id]) return; seen[e.id] = 1;
+    if (first || e.transfer || !e.by || sameName(e.by, myName())) return;
+    notify(e.by+" added a bill to "+tr.name, `${e.note||"Expense"}: ${money(e.amount,e.cur)}`, "sx-"+e.id);
+  }));
+  try { localStorage.setItem("xc.seenExp", JSON.stringify(seen)); } catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible"){ refreshRates(false); runChecks(); } });
+setInterval(runChecks, 5*60*1000);
+
+/* ---------- map ----------
+   Leaflet + OpenStreetMap. Places are looked up with OpenStreetMap's Nominatim, one per second
+   as its usage policy asks, and cached on the phone (xc.geo) so each address is looked up once. */
+const MAP = {map:null, layer:null, show:{bucket:true, places:true, housing:true, trips:true}, queue:[], timer:null, view:null};
+let GEO = {}; try { GEO = JSON.parse(localStorage.getItem("xc.geo")||"{}"); } catch(e){}
+const MAP_KINDS = {bucket:["Bucket list","#B7791F"], places:["Saved places","#2F7DB8"], housing:["Flats","#B3392F"], trips:["Trips","#0B6E69"]};
+function mapItems(){
+  const out = [];
+  if (MAP.show.bucket) S.bucket.forEach(b=>out.push({k:"bucket", q:[b.city,b.country].filter(Boolean).join(", "), t:[b.city,b.country].filter(Boolean).join(", "), s:[b.tierG,b.todo].filter(Boolean).join(" · "), sec:"bucket", id:b.id}));
+  if (MAP.show.places) S.places.forEach(p=>out.push({k:"places", q:[p.name,p.city||S.settings.city].filter(Boolean).join(", "), t:p.name, s:[p.kind,p.city].filter(Boolean).join(" · "), sec:"places", id:p.id}));
+  if (MAP.show.housing) S.housing.forEach(h=>out.push({k:"housing", q:(h.location||"")+", Madrid, Spain", t:h.location||"Flat", s:[h.eur?"€"+h.eur+"/mo":"",h.decision].filter(Boolean).join(" · "), sec:"housing", id:h.id}));
+  if (MAP.show.trips) S.trips.filter(t=>t.dest).forEach(t=>out.push({k:"trips", q:t.dest, t:t.name, s:fmtD(t.start)+" – "+fmtD(t.end), sec:"trips", id:t.id}));
+  return out.filter(x=>x.q && x.q.replace(/[, ]|Madrid|Spain/g,"").length>1);
+}
+function geoNext(){
+  if (MAP.timer) return;
+  const q = MAP.queue.shift(); if (!q){ paintMapMsg(); return; }
+  if (GEO[q]!==undefined) return geoNext();
+  MAP.timer = setTimeout(async ()=>{
+    try { const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=en&q="+encodeURIComponent(q)); const j = await r.json();
+      GEO[q] = j && j[0] ? [Number(j[0].lat), Number(j[0].lon)] : null; try { localStorage.setItem("xc.geo", JSON.stringify(GEO)); } catch(e){} } catch(e){ MAP.queue.push(q); }
+    MAP.timer = null; drawMarkers(); geoNext();
+  }, 1100);
+  paintMapMsg();
+}
+function paintMapMsg(){ const el = document.getElementById("mapMsg"); if (!el) return; const n = MAP.queue.length + (MAP.timer?1:0); el.textContent = n ? `Finding ${n} place${n>1?"s":""} on the map…` : ""; }
+function drawMarkers(){
+  if (!MAP.map) return; MAP.layer.clearLayers(); const pts = [];
+  mapItems().forEach(it=>{ const g = GEO[it.q]; if (!g) return; pts.push(g);
+    L.circleMarker(g, {radius:8, color:"#fff", weight:2, fillColor:MAP_KINDS[it.k][1], fillOpacity:.95}).addTo(MAP.layer)
+      .bindPopup(`<b>${esc(it.t)}</b>${it.s?`<br><span style="color:#5B6B70">${esc(it.s)}</span>`:""}<br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.q)}" target="_blank" rel="noopener">Google Maps</a> · <a href="#" data-act="edit" data-sec="${it.sec}" data-id="${it.id}">Edit</a>`); });
+  if (!MAP.userMoved && pts.length) MAP.map.fitBounds(pts, {padding:[30,30], maxZoom:12});
+}
+async function mountMap(){
+  const el = document.getElementById("map"); if (!el || el.dataset.ready) return; el.dataset.ready = "1";
+  if (!window.L){
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+    try { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"); } catch(e){ el.innerHTML = `<div class="empty">The map needs an internet connection.</div>`; return; }
+  }
+  if (!document.body.contains(el)) return;
+  if (MAP.map){ MAP.view = {c:MAP.map.getCenter(), z:MAP.map.getZoom()}; MAP.map.remove(); }
+  MAP.map = L.map(el, {zoomControl:true}).setView(MAP.userMoved&&MAP.view?MAP.view.c:[48,8], MAP.userMoved&&MAP.view?MAP.view.z:4);
+  MAP.map.on("dragstart", ()=>{ MAP.userMoved = true; });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:18, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(MAP.map);
+  MAP.layer = L.layerGroup().addTo(MAP.map);
+  MAP.map.on("moveend", ()=>{ MAP.view = {c:MAP.map.getCenter(), z:MAP.map.getZoom()}; });
+  // Leaflet stops clicks inside popups from bubbling, so wire the Edit links here.
+  MAP.map.on("popupopen", e=>e.popup.getElement().querySelectorAll("[data-act=edit]").forEach(a=>a.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); openSheet(a.dataset.sec, a.dataset.id); })));
+  drawMarkers();
+  mapItems().forEach(it=>{ if (GEO[it.q]===undefined && !MAP.queue.includes(it.q)) MAP.queue.push(it.q); }); geoNext();
+}
+function viewMap(){
+  const chips = Object.entries(MAP_KINDS).map(([k,[l,c]])=>`<button class="chip" data-act="mapKind" data-k="${k}" aria-pressed="${MAP.show[k]}" style="background:var(--surface);${MAP.show[k]?`border-color:${c};color:${c}`:"opacity:.55"}"><span class="dot" style="background:${c};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${l}</button>`).join("");
+  const n = mapItems().length;
+  return `<div class="row" style="flex-wrap:wrap;gap:6px">${chips}</div><div id="map" class="mapbox"></div><div class="small muted" id="mapMsg"></div>${n?"":`<div class="empty">Add places to your bucket list, saved places, flats or trips and they'll show up here.</div>`}`;
+}
+
 /* ---------- examples ---------- */
 function loadExamples(){
   const t = today(), d = n => addDays(t,n), mon = addDays(t, -dowIdx(t));
@@ -1051,6 +1224,7 @@ async function exportData(){
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([json],{type:"application/json"})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 4000); if (msg) msg.textContent = "Backup downloaded.";
 }
+document.getElementById("receiptFile").addEventListener("change", ev=>onReceipt(ev.target.files[0]));
 document.getElementById("importFile").addEventListener("change", ev=>{
   const f = ev.target.files[0]; if (!f) return; const r = new FileReader();
   r.onload = () => { try { const j = JSON.parse(r.result); if (!j || !j.data || !j.data.settings) throw 0; S = blank(); merge(j.data); save(...SECTIONS); toast("Backup imported"); } catch(e){ const m = document.getElementById("ioMsg"); if (m) m.textContent = "That file isn't an Exchange Companion backup."; } ev.target.value = ""; };
@@ -1125,7 +1299,7 @@ function startShared(){
       const ids = new Set(SH.trips.map(t=>t.id));
       SH.trips.forEach(t=>{ if (SH.subs[t.id]) return; const ref = db.collection("shared").doc(t.id);
         SH.subs[t.id] = [
-          ref.collection("expenses").onSnapshot(s=>{ SH.exp[t.id] = s.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id})); render(); }, ()=>{}),
+          ref.collection("expenses").onSnapshot(s=>{ SH.exp[t.id] = s.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id})); render(); runChecks(); }, ()=>{}),
           ref.collection("plans").onSnapshot(s=>{ SH.plans[t.id] = s.docs.filter(d=>d.exists).map(d=>Object.assign({}, d.data(), {id:d.id})); render(); }, ()=>{})
         ]; });
       Object.keys(SH.subs).forEach(id=>{ if (!ids.has(id)){ SH.subs[id].forEach(u=>u()); delete SH.subs[id]; delete SH.exp[id]; delete SH.plans[id]; } });
@@ -1230,9 +1404,11 @@ function render(){
   renderTabs();
   const v = {home:viewHome, money:viewMoney, travel:viewTravel, school:viewSchool, more:viewMore}[ui.tab] || viewHome;
   document.getElementById("app").innerHTML = v();
+  if (ui.tab==="more" && ui.more==="map") mountMap();
 }
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-act]"); if (!el) return;
+  if (el.tagName==="A" && el.getAttribute("href")==="#") ev.preventDefault();
   const a = el.dataset.act, ds = el.dataset;
   if (a==="scrim"){ if (ev.target===el) closeSheet(); return; }
   if (a!=="wipe") ui.wipeArm = false;
@@ -1283,6 +1459,12 @@ document.addEventListener("click", ev=>{
       S.settings.gsync = {url:u, token:t}; GS.err = ""; cacheLocal(); render(); gsSync(true); break; }
     case "gsNow": gsSync(true); break;
     case "signIn": signIn(); break;
+    case "scan": scanReceipt(); break;
+    case "notifyOn": enableNotify(); break;
+    case "notifyOff": S.settings.notify = false; save("settings"); toast("Notifications off"); break;
+    case "ratesNow": refreshRates(true); break;
+    case "autoRates": S.settings.autoRates = el.checked; save("settings"); if (el.checked) refreshRates(true); break;
+    case "mapKind": MAP.show[ds.k] = !MAP.show[ds.k]; render(); break;
     case "unameSave": claimName(); break;
     case "unameEdit": UNAME.editing = true; UNAME.draft = null; render(); break;
     case "unameCancel": UNAME.editing = false; UNAME.draft = null; render(); break;
