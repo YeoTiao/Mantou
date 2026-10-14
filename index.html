@@ -75,9 +75,16 @@ h3{font-size:1rem}
 .stop-dot.home{background:#fff;color:#0a0a0a}
 .leg-ic{font-size:15px;display:grid!important;place-items:center;filter:drop-shadow(0 0 2px #000)}
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center}
-.stat .n{font-family:var(--display);font-size:1.5rem;font-weight:700;color:var(--accent)}
-.stat .l{font-size:.72rem;color:var(--muted)}
+.wstat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center}
+.wstat .n{font-family:var(--display);font-size:1.5rem;font-weight:700;color:var(--accent)}
+.wstat .l{font-size:.72rem;color:var(--muted)}
+.sum-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.sum-grid .v{font-family:var(--display);font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums}
+.bal-hero{border-radius:14px;padding:14px 16px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+.bal-hero .v{font-family:var(--display);font-size:1.8rem;font-weight:700;color:var(--accent)}
+.subhead{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.night{font-size:.75rem;color:var(--stamp);padding:2px 14px 6px;background:var(--sunk)}
+.kind-ic{width:28px;text-align:center;font-size:1.1rem}
 .flag{font-size:1.4rem;width:30px;text-align:center}
 .leaflet-tooltip{background:#111;color:#fff;border-color:#333}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#171717;color:#F6F1EA}
@@ -506,7 +513,7 @@ const SCHEMA = {
   wallet:{title:"Document", fields:[{k:"name",label:"Document",type:"text",req:true,full:true,hint:"Passport, visa, insurance, student ID, residence permit…"},{k:"number",label:"Number / policy no.",type:"text"},{k:"expiry",label:"Expires",type:"date"},{k:"note",label:"Where the original is, hotline, etc.",type:"textarea",full:true}]},
   packing:{title:"Packing item", fields:[{k:"text",label:"Item",type:"text",req:true,full:true},{k:"list",label:"List",type:"select",opts:()=>["Before departure","Weekend trip","Going home"].map(x=>[x,x]),def:"Before departure",full:true},{k:"done",label:"Packed",type:"checkbox"}]},
   contacts:{title:"Emergency contact", fields:[{k:"label",label:"Who",type:"text",req:true,full:true},{k:"value",label:"Phone / email",type:"text",req:true,full:true},{k:"note",label:"Notes",type:"text",full:true}]},
-  places:{title:"Place", fields:[{k:"name",label:"Name",type:"text",req:true,full:true},{k:"kind",label:"Type",type:"select",opts:()=>["Food","Café","Study spot","Sight","Nightlife","Shop","Campus","Other"].map(x=>[x,x]),def:"Food"},{k:"city",label:"City",type:"text"},{k:"visited",label:"Been there",type:"checkbox"},{k:"note",label:"Notes",type:"text",full:true}]},
+  places:{title:"Place", fields:[{k:"name",label:"Name",type:"text",req:true,full:true},{k:"kind",label:"Type",type:"select",opts:()=>PLACE_KINDS.map(([k])=>k).map(x=>[x,x]),def:"Food"},{k:"city",label:"City",type:"text"},{k:"tripId",label:"For trip",type:"select",opts:tripOpts,full:true},{k:"address",label:"Address",type:"text",full:true},{k:"link",label:"Link",type:"text",full:true,hint:"Google Maps, Wanderlog or a website"},{k:"visited",label:"Been there",type:"checkbox"},{k:"note",label:"Notes",type:"text",full:true}]},
   sharedTrips:{title:"Shared trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},
     {k:"members",label:"Who's going",type:"text",req:true,full:true,hint:"Names, comma separated. Include yourself.",def:()=>myName()},{k:"cur",label:"Split bills in",type:"select",opts:curOpts,def:"EUR"}]},
   sharedPlans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"text",full:true}]},
@@ -533,6 +540,7 @@ function renderSheet(){
   const root = document.getElementById("sheetRoot");
   if (!sheet){ root.innerHTML = ""; return; }
   if (sheet.sec === "settings") return renderSettingsSheet(root);
+  if (sheet.sec === "paste") return renderPasteSheet(root);
   const sc = SCHEMA[sheet.sec]; const shared = sheet.sec.startsWith("shared");
   const pool = !shared ? S[sheet.sec] : sheet.sec==="sharedTrips" ? SH.trips : sheet.sec==="sharedExp" ? (SH.exp[SH.open]||[]) : (SH.plans[SH.open]||[]);
   const rec = sheet.id ? pool.find(x=>x.id===sheet.id) : null;
@@ -577,6 +585,7 @@ function renderSheet(){
       closeSheet(); shWrite(sec, tid, out).then(ok=>{ if (ok){ toast(rec?"Saved":"Added"); if (sec==="sharedTrips" && !rec){ SH.open = out.id; SH.seg = "plan"; SH.waitUntil = Date.now()+5000; render(); } } });
       return;
     }
+    if (!rec && sheet.sec==='expenses') out.createdAt = Date.now();
     const list = S[sheet.sec]; const i = list.findIndex(x=>x.id===out.id);
     if (i>=0) list[i] = out; else list.push(out);
     const sec = sheet.sec; closeSheet(); save(sec); toast(rec?"Saved":"Added");
@@ -762,16 +771,27 @@ function tripDetail(id){
     fl.filter(f=>f.dep.slice(0,10)===d).forEach(f=>items.push({k:fmtTime(f.dep),h:`<button class="item" data-act="edit" data-sec="flights" data-id="${f.id}"><span class="mono small" style="width:44px">${fmtTime(f.dep)}</span><div class="main"><div class="t mono">✈ ${esc(f.from)} → ${esc(f.to)}</div><div class="s">${esc([f.airline,f.num].filter(Boolean).join(" "))}</div></div></button>`}));
     st.filter(s=>s.checkin===d).forEach(s=>items.push({k:"14:00",h:`<button class="item" data-act="edit" data-sec="stays" data-id="${s.id}"><span class="mono small" style="width:44px">in</span><div class="main"><div class="t">Check in: ${esc(s.name)}</div><div class="s">${esc(s.address||"")}</div></div></button>`}));
     plans.filter(p=>p.date===d).forEach(p=>items.push({k:p.time||"99",h:`<button class="item" data-act="edit" data-sec="plans" data-id="${p.id}"><span class="mono small" style="width:44px">${esc(p.time||"–")}</span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${esc([p.place,p.note].filter(Boolean).join(" · "))}</div></div></button>`}));
+    st.filter(s=>s.checkout===d && s.checkin!==d).forEach(s=>items.push({k:"10:00",h:`<button class="item" data-act="edit" data-sec="stays" data-id="${s.id}"><span class="mono small" style="width:44px">out</span><div class="main"><div class="t">Check out: ${esc(s.name)}</div></div></button>`}));
     items.sort((a,b)=>a.k.localeCompare(b.k));
-    return `<div class="daygroup row between"><span>Day ${i+1} · ${fmtDW(d)}</span><button class="btn ghost sm" data-act="add" data-sec="plans" data-trip="${id}" data-date="${d}">+ Add</button></div>${items.map(x=>x.h).join("")||`<div class="item small muted" style="cursor:default">Free day</div>`}`;
+    const night = st.find(s=>s.checkin<=d && s.checkout>d);
+    return `<div class="daygroup row between"><span>Day ${i+1} · ${fmtDW(d)}</span><button class="btn ghost sm" data-act="add" data-sec="plans" data-trip="${id}" data-date="${d}">+ Add</button></div>${items.map(x=>x.h).join("")||`<div class="item small muted" style="cursor:default">Free day</div>`}${night?`<div class="night">🛏 Sleeping at ${esc(night.name)}</div>`:d<tr.end?`<div class="night" style="color:var(--muted)">🛏 Nowhere booked for tonight</div>`:""}`;
   }).join("");
+  const seg = ui.tripSeg||"plan";
+  const segH = `<div class="seg" role="group" aria-label="Trip view">${[["plan","Plan"],["places","Places"],["money","Money"]].map(([k,l])=>`<button data-act="tripSeg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
+  const unsched = S.places.filter(p=>p.tripId===id && !p.visited && !plans.some(x=>x.placeId===p.id)).length;
+  const stayH = `<section class="stack"><div class="sect-head"><h2>Where you're staying</h2><button class="btn ghost sm" data-act="add" data-sec="stays" data-date="${tr.start}" data-end="${tr.end}">+ Add stay</button></div>${st.length?`<div class="list">${st.map(s=>{ const n = daysBetween(s.checkin,s.checkout);
+      return `<div class="item" style="cursor:default"><span class="kind-ic">🛏</span><button class="main" data-act="edit" data-sec="stays" data-id="${s.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0;color:inherit"><div class="t">${esc(s.name)}${s.status==="idea"?' <span class="tag">Shortlisted</span>':""}</div><div class="s">${fmtD(s.checkin)} – ${fmtD(s.checkout)} · ${n} night${n===1?"":"s"}${s.address?" · "+esc(s.address):""}</div></button>${s.address||s.name?`<a class="btn ghost sm" href="${esc(mapsQ({name:s.name,address:s.address,city:tr.dest}))}" target="_blank" rel="noopener">Map</a>`:""}</div>`; }).join("")}</div>`:`<div class="empty">No hotel or hostel added for this trip yet.</div>`}</section>`;
+  let body;
+  if (seg==="money") body = tripMoney(id);
+  else if (seg==="places") body = tripPlaces(id);
+  else body = stayH + `<div class="row"><button class="btn sm" data-act="add" data-sec="flights" data-date="${tr.start}">Add flight</button><button class="btn sm" data-act="add" data-sec="plans" data-trip="${id}" data-date="${tr.start}">Add plan</button>${unsched?`<button class="btn sm" data-act="tripSeg" data-k="places">${unsched} saved place${unsched>1?"s":""} not in a day yet</button>`:""}</div>
+    <section class="stack"><h2>Day by day</h2><div class="list tl">${dayH}</div></section>`;
   return `<div class="row between"><button class="btn ghost sm" data-act="trip" data-id="">‹ All trips</button><button class="btn sm" data-act="edit" data-sec="trips" data-id="${id}">Edit trip</button></div>
     <div class="card stack"><div><div class="eyebrow">${esc(tr.dest||"Trip")}</div><h2 style="font-size:1.5rem">${esc(tr.name)}</h2><div class="muted">${fmtDW(tr.start)} – ${fmtDW(tr.end)}</div></div>
     <div class="grid2"><div><div class="eyebrow">Booked (flights + stays)</div><div class="num" style="font-weight:600">${money(costs,null,0)}</div></div><div><div class="eyebrow">Spent on the trip</div><div class="num" style="font-weight:600">${money(spent,null,0)}${tr.budget?` <span class="muted small">of ${money(tr.budget,null,0)}</span>`:""}</div></div></div>
     ${tr.note?`<div class="small">${esc(tr.note)}</div>`:""}
     ${/^https:\/\/(www\.)?wanderlog\.com\//.test(tr.wanderlog||"")?`<a class="btn sm" href="${esc(tr.wanderlog)}" target="_blank" rel="noopener" style="align-self:flex-start">Open in Wanderlog ↗</a>`:`<button class="btn ghost sm" data-act="edit" data-sec="trips" data-id="${id}" style="align-self:flex-start">+ Link a Wanderlog trip</button>`}</div>
-    <div class="row"><button class="btn sm" data-act="add" data-sec="flights" data-date="${tr.start}">Add flight</button><button class="btn sm" data-act="add" data-sec="stays" data-date="${tr.start}" data-end="${tr.end}">Add stay</button><button class="btn sm" data-act="add" data-sec="expenses" data-trip="${id}">Add expense</button></div>
-    <div class="list tl">${dayH}</div>`;
+    ${segH}${body}`;
 }
 function flightList(){
   const now = today()+"T00:00"; const fl = S.flights.slice().sort((a,b)=>a.dep.localeCompare(b.dep));
@@ -1051,7 +1071,7 @@ async function refreshRates(force){
 /* ---------- receipt scanning ----------
    Runs Tesseract OCR in the browser (nothing is uploaded), then guesses the total, date,
    shop and category, and opens a prefilled expense for the person to check. */
-const OCR = {busy:false, pct:0, msg:""};
+const OCR = {busy:false, pct:0, msg:"", trip:""};
 function scanReceipt(){ const inp = document.getElementById("receiptFile"); inp.value = ""; inp.click(); }
 async function shrinkImage(file){
   const img = await new Promise((ok,bad)=>{ const i = new Image(); i.onload = ()=>ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });
@@ -1070,7 +1090,7 @@ async function onReceipt(file){
     const g = parseReceipt(res.data.text||"");
     OCR.busy = false; render();
     if (!g.amount) toast("Couldn't find the total. Fill it in yourself.");
-    openSheet("expenses", null, Object.assign({cur:S.settings.local||"EUR"}, g));
+    openSheet("expenses", null, Object.assign({cur:S.settings.local||"EUR"}, OCR.trip?{tripId:OCR.trip, cat:"Travel"}:{}, g));
   } catch(e){ OCR.busy = false; render(); toast("Couldn't read that photo. Try again in better light."); }
 }
 const toNum = s => { s = s.replace(/\s/g,""); if (/,\d{2}$/.test(s)) s = s.replace(/\./g,"").replace(",","."); else s = s.replace(/,/g,""); return Number(s); };
@@ -1310,10 +1330,10 @@ async function mountWorld(){
 function viewWorld(){
   const s = worldStats(), t = today();
   const stats = `<div class="stat-row">
-    <div class="stat"><div class="n">${s.visited.size}</div><div class="l">countries</div></div>
-    <div class="stat"><div class="n">${s.cities.size}</div><div class="l">cities</div></div>
-    <div class="stat"><div class="n">${s.km>=1000?(s.km/1000).toFixed(1)+"k":Math.round(s.km)}</div><div class="l">km travelled</div></div>
-    <div class="stat"><div class="n">${s.planned.size}</div><div class="l">planned</div></div></div>`;
+    <div class="wstat"><div class="n">${s.visited.size}</div><div class="l">countries</div></div>
+    <div class="wstat"><div class="n">${s.cities.size}</div><div class="l">cities</div></div>
+    <div class="wstat"><div class="n">${s.km>=1000?(s.km/1000).toFixed(1)+"k":Math.round(s.km)}</div><div class="l">km travelled</div></div>
+    <div class="wstat"><div class="n">${s.planned.size}</div><div class="l">planned</div></div></div>`;
   const byT = Object.entries(s.byT).filter(([,v])=>v>1).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="tag">${tIcon(k)||"•"} ${esc(tName(k)||"Other")} ${Math.round(v).toLocaleString()} km</span>`).join(" ");
   const r = routeStops().slice(1).filter(x=>x.src!=="return").reverse();
   const undated = allStops().filter(x=>!x.date);
@@ -1501,12 +1521,132 @@ function friendsView(){
       <div>Friends only see the trips they're invited to. Your budget, documents, timetable and notes never leave your phone.</div>
       <div class="muted">Anyone with the invite link can join, so send it only to the people going.</div></div></details>`;
 }
+/* ---------- trip money: summary, balances, settlements, line items ---------- */
+const byRecent = (a,b) => (b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0);
+function catBars(by, cur){
+  const rows = Object.entries(by).filter(([,v])=>v>0.005).sort((a,b)=>b[1]-a[1]); const max = rows.length ? rows[0][1] : 1;
+  return rows.length ? `<div class="stack" style="gap:8px">${rows.map(([c,v])=>`<div class="cat-row"><span>${esc(c)}</span><div class="meter"><i style="width:${v/max*100}%;background:${CAT_COLORS[c]||"var(--accent)"}"></i></div><span class="num">${money(v,cur,0)}</span></div>`).join("")}</div>` : "";
+}
+function balHero(v, cur){
+  return `<div class="bal-hero"><div class="eyebrow">${Math.abs(v)<0.005?"Your balance":v>0?"You get back":"You owe"}</div><div class="v num">${Math.abs(v)<0.005?"All square":money(Math.abs(v),cur)}</div></div>`;
+}
+// line items, grouped by day, newest day first and newest entry first within a day
+function dayLines(list, line){
+  let last = null, out = "";
+  list.forEach(e=>{ if (e.date!==last){ out += `<div class="daygroup">${fmtDW(e.date)}</div>`; last = e.date; } out += line(e); });
+  return out;
+}
+function shMoney(id){
+  const tr = shTrip(id), cur = tr.cur||"EUR", members = tr.members||[], meN = members.find(m=>sameName(m,myName()));
+  const all = SH.exp[id]||[], exp = all.filter(e=>!e.transfer).sort(byRecent), tx = all.filter(e=>e.transfer).sort(byRecent);
+  const cats = {}; let total = 0, myShare = 0, myPaid = 0;
+  exp.forEach(e=>{ const a = Number(e.tripAmt)||0, sp = (e.split&&e.split.length)?e.split:members; total += a; cats[e.cat||"Other"] = (cats[e.cat||"Other"]||0)+a;
+    if (meN){ if (sp.includes(meN)) myShare += a/sp.length; if (e.paidBy===meN) myPaid += a; } });
+  const bal = shBalances(id), plan = shSettle(bal);
+  const payRow = p => `<div class="item" style="cursor:default"><div class="main"><div class="t">${meN&&p.from===meN?"You pay "+esc(p.to):meN&&p.to===meN?esc(p.from)+" pays you":esc(p.from)+" pays "+esc(p.to)}</div></div><div class="r num" style="font-weight:600">${money(p.amt,cur)}</div><button class="btn sm" data-act="shPaid" data-from="${esc(p.from)}" data-to="${esc(p.to)}" data-amt="${p.amt}">Mark paid</button></div>`;
+  const mine = plan.filter(p=>meN && p.from===meN), theirs = plan.filter(p=>meN && p.to===meN), rest = plan.filter(p=>!mine.includes(p) && !theirs.includes(p));
+  const summary = `<section class="stack"><h2>Expenses</h2><div class="card stack">
+    <div class="sum-grid"><div><div class="eyebrow">Trip total</div><div class="v">${money(total,cur)}</div></div><div><div class="eyebrow">Per person</div><div class="v">${money(members.length?total/members.length:0,cur)}</div></div>
+    ${meN?`<div><div class="eyebrow">Your share</div><div class="v">${money(myShare,cur)}</div></div><div><div class="eyebrow">You paid</div><div class="v">${money(myPaid,cur)}</div></div>`:""}</div>
+    ${catBars(cats,cur)}</div></section>`;
+  const balances = `<section class="stack"><h2>Balances</h2>${meN?balHero(bal[meN]||0,cur):""}
+    ${mine.length?`<div class="subhead">You need to pay</div><div class="list">${mine.map(payRow).join("")}</div>`:""}
+    ${theirs.length?`<div class="subhead">Paying you back</div><div class="list">${theirs.map(payRow).join("")}</div>`:""}
+    ${rest.length?`<div class="subhead">${meN?"Between the others":"Fewest payments to settle up"}</div><div class="list">${rest.map(payRow).join("")}</div>`:""}
+    ${plan.length?"":`<div class="empty">Everyone is square.</div>`}
+    <details class="card"><summary style="cursor:pointer;font-weight:600">Everyone's balance</summary><div class="list" style="margin-top:8px">${Object.entries(bal).map(([n,v])=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(n)}${meN===n?' <span class="tag accent">You</span>':""}</div></div><div class="r num" style="font-weight:600;color:${v>0.005?"var(--good)":v<-0.005?"var(--bad)":"var(--muted)"}">${Math.abs(v)<0.005?"square":(v>0?"gets back ":"owes ")+money(Math.abs(v),cur)}</div></div>`).join("")}</div></details></section>`;
+  const settles = `<section class="stack"><h2>Settlements</h2>${tx.length?`<div class="list">${tx.map(e=>`<div class="item" style="cursor:default"><span class="tag good">Paid</span><div class="main"><div class="t">${esc(e.from)} paid ${esc(e.to)}</div><div class="s">${fmtDW(e.date)}${e.by?" · marked by "+esc(e.by):""}</div></div><div class="r num">${money(e.tripAmt,cur)}</div><button class="btn ghost sm" data-act="shUndo" data-id="${e.id}">${ui.undoArm===e.id?"Tap to undo":"Undo"}</button></div>`).join("")}</div>`:`<div class="empty">No paybacks yet. Tap Mark paid above when someone pays.</div>`}</section>`;
+  const lines = `<section class="stack"><div class="sect-head"><h2>All expenses</h2><span class="small muted">Newest first</span></div><button class="btn primary" data-act="add" data-sec="sharedExp">Add shared expense</button>
+    ${exp.length?`<div class="list">${dayLines(exp, e=>{ const sp = (e.split&&e.split.length)?e.split:members; const share = meN && sp.includes(meN) ? (Number(e.tripAmt)||0)/sp.length : 0;
+      return `<button class="item" data-act="shEdit" data-sec="sharedExp" data-id="${e.id}"><span class="dot" style="background:${CAT_COLORS[e.cat]||"var(--muted)"}"></span><div class="main"><div class="t">${esc(e.note||e.cat)}</div><div class="s">${esc(meN===e.paidBy?"You":e.paidBy)} paid · split ${sp.length} way${sp.length===1?"":"s"}${share?" · your share "+money(share,cur):""}</div></div><div class="r num" style="font-weight:600">${money(e.amount,e.cur)}${e.cur!==cur?`<div class="small muted">${money(e.tripAmt,cur)}</div>`:""}</div></button>`; })}</div>`
+    :`<div class="empty">No shared expenses yet. Whoever pays adds it, and the app splits it.</div>`}</section>`;
+  return summary + balances + settles + lines;
+}
+// Money for a personal trip: expenses tagged with the trip, split with friends by name.
+function tripMoney(id){
+  const tr = S.trips.find(x=>x.id===id), home = S.settings.home;
+  const ex = S.expenses.filter(e=>e.tripId===id), items = ex.filter(e=>!e.settle).sort(byRecent), settles = ex.filter(e=>e.settle).sort(byRecent);
+  const fl = S.flights.filter(f=>f.dep.slice(0,10)>=tr.start && f.dep.slice(0,10)<=tr.end), st = S.stays.filter(s=>s.checkin<=tr.end && s.checkout>=tr.start);
+  const cats = {}; let mine = 0, paid = 0, booked = 0;
+  items.forEach(e=>{ const sh = myShare(e); mine += sh; cats[e.cat||"Other"] = (cats[e.cat||"Other"]||0)+sh; if (isMe(e.paidBy)) paid += toHome(e.amount,e.cur); });
+  fl.forEach(f=>{ const v = toHome(f.price,f.cur); booked += v; cats["Flights (booked)"] = (cats["Flights (booked)"]||0)+v; });
+  st.forEach(x=>{ const v = toHome(x.price,x.cur); booked += v; cats["Stays (booked)"] = (cats["Stays (booked)"]||0)+v; });
+  const bal = {}; ex.forEach(e=>{ if (e.settle){ bal[e.person]=(bal[e.person]||0)-Number(e.delta||0); return; } const others = splitNames(e.splitWith), share = toHome(e.amount,e.cur)/(others.length+1);
+    if (isMe(e.paidBy)) others.forEach(o=>bal[o]=(bal[o]||0)+share); else { const p = String(e.paidBy||"").trim(); bal[p]=(bal[p]||0)-share; } });
+  const rows = Object.entries(bal).filter(([,v])=>Math.abs(v)>0.005), net = rows.reduce((s,[,v])=>s+v,0);
+  const bRow = ([n,v]) => `<div class="item" style="cursor:default"><div class="main"><div class="t">${v>0?esc(n)+" owes you":"You owe "+esc(n)}</div></div><div class="r num" style="font-weight:600;color:${v>0?"var(--good)":"var(--bad)"}">${money(Math.abs(v))}</div><button class="btn sm" data-act="settle" data-n="${esc(n)}" data-v="${v}" data-trip="${id}">Settle</button></div>`;
+  const toMe = rows.filter(([,v])=>v>0), fromMe = rows.filter(([,v])=>v<0);
+  return `<section class="stack"><h2>Expenses</h2><div class="card stack">
+      <div class="sum-grid"><div><div class="eyebrow">Your cost so far</div><div class="v">${money(mine+booked,null,0)}</div>${tr.budget?`<div class="small muted num">of ${money(tr.budget,null,0)} budget</div>`:""}</div><div><div class="eyebrow">Booked ahead</div><div class="v">${money(booked,null,0)}</div><div class="small muted">flights and stays</div></div>
+      <div><div class="eyebrow">Spent there</div><div class="v">${money(mine,null,0)}</div><div class="small muted">your share</div></div><div><div class="eyebrow">You paid out</div><div class="v">${money(paid,null,0)}</div><div class="small muted">incl. friends' shares</div></div></div>
+      ${tr.budget?`<div class="meter${mine+booked>tr.budget?" over":""}"><i style="width:${Math.min(100,(mine+booked)/tr.budget*100)}%"></i></div>`:""}
+      ${catBars(cats)}</div></section>
+    <section class="stack"><h2>Balances</h2>${rows.length?balHero(net):""}
+      ${fromMe.length?`<div class="subhead">You need to pay</div><div class="list">${fromMe.map(bRow).join("")}</div>`:""}
+      ${toMe.length?`<div class="subhead">Owed to you</div><div class="list">${toMe.map(bRow).join("")}</div>`:""}
+      ${rows.length?"":`<div class="empty">All square on this trip. Put friends' names in "Split with" on an expense and the app works out who owes who.</div>`}</section>
+    <section class="stack"><h2>Settlements</h2>${settles.length?`<div class="list">${settles.map(e=>`<div class="item" style="cursor:default"><span class="tag good">Paid</span><div class="main"><div class="t">${e.delta>0?esc(e.person)+" paid you":"You paid "+esc(e.person)}</div><div class="s">${fmtDW(e.date)}</div></div><div class="r num">${money(e.amount,e.cur)}</div><button class="btn ghost sm" data-act="undoSettle" data-id="${e.id}">${ui.undoArm===e.id?"Tap to undo":"Undo"}</button></div>`).join("")}</div>`:`<div class="empty">No paybacks yet.</div>`}</section>
+    <section class="stack"><div class="sect-head"><h2>All expenses</h2><span class="small muted">Newest first</span></div>
+      <div class="row" style="gap:8px"><button class="btn primary" data-act="add" data-sec="expenses" data-trip="${id}" style="flex:1">Add expense</button><button class="btn" data-act="scan" data-trip="${id}" style="flex:1">📷 Scan receipt</button></div>
+      ${items.length?`<div class="list">${dayLines(items, e=>{ const others = splitNames(e.splitWith);
+        const sub = [e.cat, others.length?`split ${others.length+1} ways`:"", !isMe(e.paidBy)?`${e.paidBy} paid`:"", others.length?"your share "+money(myShare(e)):e.cur!==home?money(toHome(e.amount,e.cur)):""].filter(Boolean).join(" · ");
+        return `<button class="item" data-act="edit" data-sec="expenses" data-id="${e.id}"><span class="dot" style="background:${CAT_COLORS[e.cat]||"var(--muted)"}"></span><div class="main"><div class="t">${esc(e.note||e.cat)}</div><div class="s">${esc(sub)}</div></div><div class="r num" style="font-weight:600">${money(e.amount,e.cur)}</div></button>`; })}</div>`
+      :`<div class="empty">Nothing spent on this trip yet. Expenses you tag with this trip show up here.</div>`}</section>`;
+}
+
+/* ---------- trip places (and pasting a list from Wanderlog) ---------- */
+const PLACE_KINDS = [["Sight","🏛️"],["Food","🍽️"],["Café","☕"],["Nightlife","🍸"],["Shop","🛍️"],["Nature","🌳"],["Museum","🖼️"],["Study spot","📚"],["Campus","🎓"],["Other","📍"]];
+const kindIc = k => (PLACE_KINDS.find(x=>x[0]===k)||PLACE_KINDS[PLACE_KINDS.length-1])[1];
+const mapsQ = p => "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent([p.name,p.address||p.city].filter(Boolean).join(", "));
+function tripPlaces(id){
+  const tr = S.trips.find(x=>x.id===id), ps = S.places.filter(p=>p.tripId===id);
+  const sched = new Set(S.plans.filter(p=>p.tripId===id && p.placeId).map(p=>p.placeId));
+  const row = p => `<div class="item${p.visited?" done":""}" style="cursor:default"><span class="kind-ic">${kindIc(p.kind)}</span>
+    <button class="main" data-act="edit" data-sec="places" data-id="${p.id}" style="background:none;border:0;text-align:left;cursor:pointer;padding:0;color:inherit"><div class="t">${esc(p.name)} ${p.visited?'<span class="tag good">Been</span>':sched.has(p.id)?'<span class="tag accent">In the plan</span>':""}</div><div class="s">${esc([p.kind,p.address,p.note].filter(Boolean).join(" · "))}</div></button>
+    <span class="row" style="gap:4px;flex-wrap:nowrap">${sched.has(p.id)||p.visited?"":`<button class="btn sm" data-act="schedPlace" data-id="${p.id}">Add to a day</button>`}<a class="btn ghost sm" href="${esc(/^https?:\/\//.test(p.link||"")?p.link:mapsQ(p))}" target="_blank" rel="noopener" aria-label="Open ${esc(p.name)} in maps">Map</a></span></div>`;
+  const kinds = PLACE_KINDS.map(([k])=>k).filter(k=>ps.some(p=>(p.kind||"Other")===k));
+  return `<div class="row" style="gap:8px"><button class="btn primary" data-act="add" data-sec="places" data-trip="${id}" style="flex:1">Add a place</button><button class="btn" data-act="pastePlaces" data-trip="${id}" style="flex:1">Paste a list</button></div>
+    ${ps.length?kinds.map(k=>`<section class="stack"><h3>${kindIc(k)} ${esc(k)}</h3><div class="list">${ps.filter(p=>(p.kind||"Other")===k).sort((a,b)=>(a.visited?1:0)-(b.visited?1:0)).map(row).join("")}</div></section>`).join("")
+      :`<div class="empty">Save the sights, restaurants and bars you want to hit in ${esc(tr.dest||"this trip")}, then drop them into a day.</div>`}
+    <details class="card"><summary style="cursor:pointer;font-weight:600">Bringing places over from Wanderlog</summary><div class="small stack" style="margin-top:8px">
+      <div>Wanderlog doesn't let other apps read your trips, so Mantou can't pull them in by itself. The quickest way across: open your trip in Wanderlog, copy the place names (or Google Maps links) from your list, and tap <b>Paste a list</b> here. One place per line.</div>
+      <div>Hotels go under Stays, so they show on your day plan and in the trip's costs.</div></div></details>`;
+}
+function renderPasteSheet(root){
+  const tr = S.trips.find(x=>x.id===sheet.preset.tripId);
+  root.innerHTML = `<div class="scrim" data-act="scrim"><form class="sheet" id="pasteForm" role="dialog" aria-modal="true" aria-label="Paste places">
+    <div class="row between"><h2>Paste places</h2><button type="button" class="btn ghost" data-act="close">Cancel</button></div>
+    <div class="small muted">One place per line, from Wanderlog, Google Maps, a group chat or anywhere. Links are kept with the place.</div>
+    <div class="fields"><div class="field full"><label for="pp_txt">Places</label><textarea id="pp_txt" rows="8" placeholder="Sagrada Família&#10;Bar Calders&#10;https://maps.app.goo.gl/…"></textarea></div>
+    <div class="field"><label for="pp_kind">Type</label><select id="pp_kind">${PLACE_KINDS.map(([k,i])=>`<option value="${esc(k)}">${i} ${esc(k)}</option>`).join("")}</select></div></div>
+    <div id="formErr" class="small" style="color:var(--bad)"></div>
+    <div class="row between"><span></span><button class="btn primary" type="submit">Add places</button></div></form></div>`;
+  setTimeout(()=>document.getElementById("pp_txt").focus(),30);
+  root.querySelector("#pasteForm").addEventListener("submit", ev=>{
+    ev.preventDefault();
+    const found = parsePlaces(document.getElementById("pp_txt").value);
+    if (!found.length){ document.getElementById("formErr").textContent = "Paste at least one place."; return; }
+    const kind = document.getElementById("pp_kind").value, have = new Set(S.places.filter(p=>p.tripId===tr.id).map(p=>p.name.toLowerCase()));
+    let n = 0; found.forEach(f=>{ if (have.has(f.name.toLowerCase())) return; have.add(f.name.toLowerCase()); S.places.push({id:uidGen(), name:f.name, link:f.link||"", kind, city:tr.dest||"", tripId:tr.id, visited:false}); n++; });
+    closeSheet(); save("places"); toast(n ? `Added ${n} place${n>1?"s":""}` : "Those places are already saved");
+  });
+}
+function parsePlaces(txt){
+  const out = [];
+  String(txt||"").split(/\r?\n/).forEach(line=>{
+    let l = line.trim(); if (!l) return;
+    const m = l.match(/https?:\/\/\S+/); const link = m ? m[0] : "";
+    l = l.replace(/https?:\/\/\S+/g,"").replace(/^\s*(?:[-*•·]|\d+[.)])\s*/,"").replace(/\s*[-–|:]\s*$/,"").trim();
+    if (!l && link){ const pm = link.match(/\/place\/([^/@?]+)/); if (pm) l = decodeURIComponent(pm[1].replace(/\+/g," ")); }
+    if (!l && link) l = "Saved link";
+    if (l) out.push({name:l.slice(0,120), link});
+  });
+  return out;
+}
 function sharedDetail(id){
   const tr = shTrip(id), cur = tr.cur||"EUR", me = myName(), members = tr.members||[];
-  const exp = (SH.exp[id]||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  const total = exp.filter(e=>!e.transfer).reduce((s,e)=>s+(Number(e.tripAmt)||0),0);
   const seg = SH.seg;
-  const segH = `<div class="seg" role="group" aria-label="Shared trip view">${[["plan","Plan"],["exp","Expenses"],["bal","Who owes who"]].map(([k,l])=>`<button data-act="shSeg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
+  const segH = `<div class="seg" role="group" aria-label="Shared trip view">${[["plan","Plan"],["money","Money"]].map(([k,l])=>`<button data-act="shSeg" data-k="${k}" aria-pressed="${(seg==="plan")===(k==="plan")}">${l}</button>`).join("")}</div>`;
   let body = "";
   if (seg==="plan"){
     const days = []; if (tr.start && tr.end) for (let d=tr.start; d<=tr.end && days.length<60; d=addDays(d,1)) days.push(d);
@@ -1514,17 +1654,7 @@ function sharedDetail(id){
     body = `<div class="list tl">${days.map((d,i)=>{ const its = plans.filter(p=>p.date===d).sort((a,b)=>(a.time||"99").localeCompare(b.time||"99"));
       return `<div class="daygroup row between"><span>Day ${i+1} · ${fmtDW(d)}</span><button class="btn ghost sm" data-act="add" data-sec="sharedPlans" data-date="${d}">+ Add</button></div>${its.map(p=>`<button class="item" data-act="shEdit" data-sec="sharedPlans" data-id="${p.id}"><span class="mono small" style="width:44px">${esc(p.time||"–")}</span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${esc([p.place,p.note,p.by?"added by "+p.by:""].filter(Boolean).join(" · "))}</div></div></button>`).join("")||`<div class="item small muted" style="cursor:default">Nothing planned yet</div>`}`; }).join("")}</div>`;
   }
-  if (seg==="exp"){
-    body = `<button class="btn primary" data-act="add" data-sec="sharedExp">Add shared expense</button>` + (exp.length?`<div class="list">${exp.map(e=> e.transfer
-      ? `<button class="item" data-act="shEdit" data-sec="sharedExp" data-id="${e.id}"><span class="tag good">Paid back</span><div class="main"><div class="t">${esc(e.from)} paid ${esc(e.to)}</div><div class="s">${fmtDW(e.date)}</div></div><div class="r num">${money(e.tripAmt,cur)}</div></button>`
-      : `<button class="item" data-act="shEdit" data-sec="sharedExp" data-id="${e.id}"><span class="dot" style="background:${CAT_COLORS[e.cat]||"var(--muted)"}"></span><div class="main"><div class="t">${esc(e.note||e.cat)}</div><div class="s">${esc(e.paidBy)} paid · split ${(e.split&&e.split.length)?e.split.length:members.length} ways · ${fmtD(e.date)}</div></div><div class="r num" style="font-weight:600">${money(e.amount,e.cur)}${e.cur!==cur?`<div class="small muted">${money(e.tripAmt,cur)}</div>`:""}</div></button>`).join("")}</div>`:`<div class="empty">No shared expenses yet. Whoever pays adds it, and the app splits it.</div>`)
-      + `<div class="small muted num">Trip total ${money(total,cur)}${members.length?` · ${money(total/members.length,cur)} each on average`:""}</div>`;
-  }
-  if (seg==="bal"){
-    const bal = shBalances(id), plan = shSettle(bal);
-    body = `<div class="list">${Object.entries(bal).map(([n,v])=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(n)}${me&&sameName(n,me)?' <span class="tag accent">You</span>':""}</div></div><div class="r num" style="font-weight:600;color:${v>0.005?"var(--good)":v<-0.005?"var(--bad)":"var(--muted)"}">${Math.abs(v)<0.005?"square":(v>0?"gets back ":"owes ")+money(Math.abs(v),cur)}</div></div>`).join("")}</div>
-      <h3>Fewest payments to settle up</h3>${plan.length?`<div class="list">${plan.map(p=>`<div class="item" style="cursor:default"><div class="main"><div class="t">${esc(p.from)} pays ${esc(p.to)}</div><div class="s num">${money(p.amt,cur)}</div></div><button class="btn sm" data-act="shPaid" data-from="${esc(p.from)}" data-to="${esc(p.to)}" data-amt="${p.amt}">Mark paid</button></div>`).join("")}</div>`:`<div class="empty">Everyone is square.</div>`}`;
-  }
+  if (seg!=="plan") body = shMoney(id);
   const whoami = me && members.some(m=>sameName(m,me)) ? "" : `<div class="banner"><span>Which one is you?</span><span class="row">${members.map(m=>`<button class="chip" data-act="iam" data-n="${esc(m)}">${esc(m)}</button>`).join("")}<button class="chip" data-act="addMe">I'm not listed</button></span></div>`;
   return `<div class="row between"><button class="btn ghost sm" data-act="shOpen" data-id="">‹ Shared trips</button><span class="row"><button class="btn sm primary" data-act="invite">Invite friends</button><button class="btn sm" data-act="shEdit" data-sec="sharedTrips" data-id="${id}">Edit</button></span></div>
     <div class="card stack"><div><div class="eyebrow">${tr.dest?esc(tr.dest)+" · ":""}Shared trip</div><h2 style="font-size:1.5rem">${esc(tr.name)}</h2><div class="muted">${fmtDW(tr.start)} – ${fmtDW(tr.end)}</div></div>
@@ -1572,15 +1702,21 @@ document.addEventListener("click", ev=>{
     case "settings": openSheet("settings"); break;
     case "month": { const [y,m] = ui.month.split("-").map(Number); const d = new Date(y, m-1+Number(ds.d), 1); ui.month = d.getFullYear()+"-"+pad(d.getMonth()+1); render(); break; }
     case "tseg": ui.travelSeg = ds.k; ui.openTrip = null; SH.open = null; render(); break;
-    case "trip": ui.tab = "travel"; ui.travelSeg = "trips"; ui.openTrip = ds.id || null; render(); window.scrollTo(0,0); break;
+    case "trip": ui.tab = "travel"; ui.travelSeg = "trips"; if (ui.openTrip!==ds.id) ui.tripSeg = "plan"; ui.openTrip = ds.id || null; render(); window.scrollTo(0,0); break;
     case "day": ui.schoolDay = Number(ds.i); render(); break;
     case "more": ui.tab = "more"; ui.more = ds.k || null; render(); window.scrollTo(0,0); break;
+    case "tripSeg": ui.tripSeg = ds.k; render(); break;
+    case "pastePlaces": openSheet("paste", null, {tripId:ds.trip}); break;
+    case "schedPlace": { const p = S.places.find(x=>x.id===ds.id), tr = p && S.trips.find(x=>x.id===p.tripId); if (!p) break;
+      openSheet("plans", null, {tripId:p.tripId, title:p.name, place:p.address||p.city||"", placeId:p.id, date:tr?(today()>tr.start&&today()<=tr.end?today():tr.start):today()}); break; }
+    case "undoSettle": { if (ui.undoArm!==ds.id){ ui.undoArm = ds.id; render(); break; } ui.undoArm = null; S.expenses = S.expenses.filter(e=>e.id!==ds.id); save("expenses"); toast("Payback undone"); break; }
+    case "shUndo": { if (ui.undoArm!==ds.id){ ui.undoArm = ds.id; render(); break; } ui.undoArm = null; shWrite("sharedExp", SH.open, {id:ds.id}, true).then(ok=>ok&&toast("Payback undone")); break; }
     case "toggle": { const it = S[ds.sec].find(x=>x.id===ds.id); if (it){ it.done = !it.done; save(ds.sec); } break; }
     case "unpack": S.packing.forEach(p=>{ if ((p.list||"Before departure")===ds.l) p.done=false; }); save("packing"); break;
     case "spainAdmin": SPAIN_ADMIN.forEach(([title,kind,n])=>S.deadlines.push({id:uidGen(),title,kind,course:"",due:addDays(today(),n),done:false,spain:true,note:"Suggested date, adjust it"})); save("deadlines"); toast("Checklist added"); break;
     case "sosStarter": EMERGENCY_STARTER.forEach(([label,value,note])=>S.contacts.push({id:uidGen(),label,value,note})); save("contacts"); break;
     case "packStarter": STARTER.forEach(([text,list])=>S.packing.push({id:uidGen(),text,list,done:false})); save("packing"); break;
-    case "settle": { const v = Number(ds.v), n = ds.n; S.expenses.push({id:uidGen(),date:today(),cat:"Other",note:"Settled up with "+n,amount:Math.abs(v),cur:S.settings.home,paidBy:v>0?n:"me",splitWith:"",tripId:"",settle:true,person:n,delta:v});
+    case "settle": { const v = Number(ds.v), n = ds.n; S.expenses.push({id:uidGen(),date:today(),cat:"Other",note:"Settled up with "+n,amount:Math.abs(v),cur:S.settings.home,paidBy:v>0?n:"me",splitWith:"",tripId:ds.trip||"",settle:true,person:n,delta:v,createdAt:Date.now()});
       // a settlement is a transfer: it zeroes the balance and doesn't count as spending
       save("expenses"); toast("Settled with "+n); break; }
     case "copy": { const v = ds.v; navigator.clipboard.writeText(v).then(()=>toast("Copied"),()=>toast(v)); break; }
@@ -1604,7 +1740,7 @@ document.addEventListener("click", ev=>{
       S.settings.gsync = {url:u, token:t}; GS.err = ""; cacheLocal(); render(); gsSync(true); break; }
     case "gsNow": gsSync(true); break;
     case "signIn": signIn(); break;
-    case "scan": scanReceipt(); break;
+    case "scan": OCR.trip = ds.trip||""; scanReceipt(); break;
     case "notifyOn": enableNotify(); break;
     case "notifyOff": S.settings.notify = false; save("settings"); toast("Notifications off"); break;
     case "ratesNow": refreshRates(true); break;
