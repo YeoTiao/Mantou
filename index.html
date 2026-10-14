@@ -5,15 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mantou</title>
 <meta name="description" content="Budget, trips, flights, stays, timetable and deadlines for an exchange semester.">
-<meta name="theme-color" content="#0B6E69">
+<meta name="theme-color" content="#0D0D0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mantou">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="manifest.webmanifest?v=5">
-<link rel="icon" href="icons/mantou.svg" type="image/svg+xml">
-<link rel="icon" href="icons/mantou-192.png" sizes="192x192">
-<link rel="apple-touch-icon" href="icons/mantou-apple-180.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="manifest.webmanifest?v=7">
+<link rel="icon" href="icons/bun-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/bun-apple-180.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
 <script src="config.js"></script>
 
@@ -22,22 +21,15 @@
 <style>
 /* Layout: one-column phone app with a bottom tab bar; on wide screens the bar moves to the top and content caps at 760px. */
 :root{
-  --bg:#EEF2F1; --surface:#FFFFFF; --sunk:#E3E9E8; --line:#D3DCDA;
-  --fg:#14232B; --muted:#5B6B70; --accent:#0B6E69; --accent-ink:#FFFFFF; --accent-soft:#D5EBE8;
-  --stamp:#B7791F; --stamp-soft:#F6E9D2; --good:#2E7D4F; --warn:#B7791F; --bad:#B3392F;
+  /* Black and orange: one dark palette everywhere. */
+  --bg:#0D0D0D; --surface:#171717; --sunk:#202020; --line:#2C2C2C;
+  --fg:#F6F1EA; --muted:#A39C93; --accent:#FF8A1F; --accent-ink:#1A0D00; --accent-soft:#3A230D;
+  --stamp:#FFB04D; --stamp-soft:#3A2A14; --good:#5FD08A; --warn:#FFB04D; --bad:#FF6B5E;
   --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --r:14px;
+  --r:14px; color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#0F181B; --surface:#172327; --sunk:#1E2C31; --line:#2A3B40;
-  --fg:#E5EEEC; --muted:#93A6A9; --accent:#4FC1B8; --accent-ink:#06201E; --accent-soft:#183B3A;
-  --stamp:#E3B15C; --stamp-soft:#3A2F1B; --good:#6CC891; --warn:#E3B15C; --bad:#EF7E72; color-scheme:dark }}
-:root[data-theme="dark"]{
-  --bg:#0F181B; --surface:#172327; --sunk:#1E2C31; --line:#2A3B40;
-  --fg:#E5EEEC; --muted:#93A6A9; --accent:#4FC1B8; --accent-ink:#06201E; --accent-soft:#183B3A;
-  --stamp:#E3B15C; --stamp-soft:#3A2F1B; --good:#6CC891; --warn:#E3B15C; --bad:#EF7E72; color-scheme:dark }
 
 *{box-sizing:border-box}
 html,body{background:var(--bg);color:var(--fg)}
@@ -63,15 +55,15 @@ h3{font-size:1rem}
 /* top bar */
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .brand{display:flex;align-items:center;gap:10px}
-.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:.8rem}
+.brand-mark{width:34px;height:34px;border-radius:9px;object-fit:cover;box-shadow:0 0 0 1.5px var(--accent);background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:.8rem}
 .gate{max-width:420px;margin:12vh auto 0;padding:0 16px;text-align:center;align-items:center}
 .gate h1{font-family:var(--display);font-size:2rem;margin:0}
 .gate p{margin:0}
-.cover{width:200px;height:200px;border-radius:44px;background:radial-gradient(circle at 50% 40%,#FFF4DE 0,#F6E3BD 60%,#EBCB92 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px rgba(185,97,30,.25);margin-bottom:8px}
+.cover{width:200px;height:200px;border-radius:44px;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--accent),0 16px 48px rgba(255,138,31,.35);margin-bottom:8px}
 .cover.small{width:130px;height:130px;border-radius:30px}
-.cover.small img{width:100px;height:100px}
+.cover.small img{width:100%;height:100%}
 .uname-at{display:flex;align-items:center;padding:0 10px;background:var(--sunk);border:1px solid var(--line);border-right:0;border-radius:10px 0 0 10px;color:var(--muted);font-family:var(--mono)}
-.cover img{width:150px;height:150px}
+.cover img{width:100%;height:100%;object-fit:cover}
 .gbtn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;font-size:1rem}
 .gbtn svg{background:#fff;border-radius:4px;padding:2px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -222,7 +214,7 @@ const CURRENCIES = ["SGD","EUR","GBP","USD","CHF","CZK","HUF","PLN","SEK","NOK",
 // Approximate value of 1 unit in SGD. Editable in Settings.
 const DEFAULT_RATES_SGD = {CZK:0.057,HUF:0.0036,PLN:0.33,ISK:0.0095,TRY:0.033,RON:0.29,BGN:0.74,MAD:0.13,SGD:1,EUR:1.50,GBP:1.73,USD:1.30,AUD:0.86,NZD:0.78,CAD:0.95,CHF:1.62,SEK:0.135,NOK:0.125,DKK:0.20,JPY:0.0088,KRW:0.00095,CNY:0.18,HKD:0.167,TWD:0.041,THB:0.039,MYR:0.30,IDR:0.00008,INR:0.0155};
 const CATS = ["Rent","Food","Groceries","Transport","Travel","School","Fun","Shopping","Phone & bills","Other"];
-const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#0B8A83","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#0B8A83"};
+const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#FF8A1F","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#FF8A1F"};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal","housing","bucket"];
 // Lists that mirror the WooHoo Google Sheets (see sheets-sync/Code.gs).
@@ -427,7 +419,7 @@ function nameForm(first){
     <div class="row" style="justify-content:${first?"center":"flex-end"}">${first?"":`<button type="button" class="btn ghost sm" data-act="unameCancel">Cancel</button>`}<button type="button" class="btn primary${first?"":" sm"}" id="unameSave" data-act="unameSave" disabled>${first?"Continue":"Save"}</button></div></form>`;
 }
 function viewPickName(){
-  return `<div class="gate stack"><div class="cover small"><img src="icons/mantou.svg" alt="" width="110" height="110"></div><h1 style="font-size:1.6rem">Pick a username</h1>
+  return `<div class="gate stack"><div class="cover small"><img src="icons/mantou-photo.jpg" alt="" width="130" height="130"></div><h1 style="font-size:1.6rem">Pick a username</h1>
     <p class="muted">Your unique name in Mantou. You can change it later in Settings.</p>${nameForm(true)}</div>`;
 }
 document.addEventListener("input", ev=>{ if (ev.target.id==="uname"){ const n = normName(ev.target.value); if (n!==ev.target.value) ev.target.value = n; checkName(n); } });
@@ -435,7 +427,7 @@ document.addEventListener("keydown", ev=>{ if (ev.target.id==="uname" && ev.key=
 function viewGate(){
   const busy = AUTH.state==="loading";
   const msg = AUTH.state==="noconn" ? "You're offline. Connect to the internet to sign in." : "";
-  return `<div class="gate stack"><div class="cover"><img src="icons/mantou.svg" alt="" width="180" height="180"></div><h1>Mantou</h1><div class="eyebrow">Your exchange companion</div>
+  return `<div class="gate stack"><div class="cover"><img src="icons/mantou-photo.jpg" alt="Mantou" width="200" height="200"></div><h1>Mantou</h1><div class="eyebrow" style="color:var(--accent)">Your exchange companion</div>
     <p class="muted">Budget, trips, flights, flats, timetable and bill splitting, all in one place. Sign in to keep everything in your account and use it on any phone.</p>
     ${busy?`<div class="muted small">Loading…</div>`:AUTH.state==="noconn"?`<div class="small">${msg}</div>`:`<button class="btn primary gbtn" data-act="signIn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.7-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.4 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1C3.4 21.4 7.4 24 12 24z"/><path fill="#FBBC05" d="M5.4 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4V6.5H1.4C.5 8.2 0 10 0 12s.5 3.8 1.4 5.5z"/><path fill="#EA4335" d="M12 4.8c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.6 1.4 6.5l4 3.1C6.3 6.9 8.9 4.8 12 4.8z"/></svg>Continue with Google</button>`}
     ${AUTH.err?`<div class="small" style="color:var(--bad)">${esc(AUTH.err)}</div>`:""}
@@ -616,7 +608,7 @@ function topBar(title, sub){
   const pill = AUTH.state==="in" ? `<span class="save-pill ok" title="Saved to your account (${esc(AUTH.user&&AUTH.user.email||"")}) and on this phone.">Saved to account</span>`
     : AUTH.state==="offline" ? `<span class="save-pill" title="Can't reach your account right now. Changes stay on this phone and upload when you're back online.">Offline</span>`
     : `<span class="save-pill ok" title="Your data is kept on this device.">Saved on this phone</span>`;
-  return `<header class="top" id="topbar"><div class="brand"><div class="brand-mark" aria-hidden="true">${esc((st.local||"EX").slice(0,3))}</div><div><h1 style="font-size:1.35rem">${esc(title)}</h1>${sub?`<div class="small muted">${esc(sub)}</div>`:""}</div></div>${pill}</header>`;
+  return `<header class="top" id="topbar"><div class="brand"><img class="brand-mark" src="icons/mantou-photo.jpg" alt="" aria-hidden="true"><div><h1 style="font-size:1.35rem">${esc(title)}</h1>${sub?`<div class="small muted">${esc(sub)}</div>`:""}</div></div>${pill}</header>`;
 }
 function renderTop(){ const el = document.getElementById("topbar"); if (el){ const tmp=document.createElement("div"); tmp.innerHTML = topBar(el.querySelector("h1").textContent, (el.querySelector(".small")||{}).textContent); el.replaceWith(tmp.firstElementChild);} }
 
@@ -659,7 +651,7 @@ function viewHome(){
   // documents expiring
   const soon = S.wallet.filter(w=>w.expiry && daysBetween(t,w.expiry) <= 60);
   const warnH = soon.length ? `<div class="banner"><span>${soon.map(w=>`<b>${esc(w.name)}</b> ${daysBetween(t,w.expiry)<0?"expired":"expires "+rel(w.expiry)}`).join(" · ")}</span><button class="btn sm" data-act="more" data-k="wallet">Open wallet</button></div>` : "";
-  return topBar("Exchange Companion", st.city?`${st.city}${st.country?", "+st.country:""}`:"") + examplesBanner() + hero + warnH +
+  return topBar("Mantou", st.city?`${st.city}${st.country?", "+st.country:""}`:"") + examplesBanner() + hero + warnH +
     `<section class="stack"><div class="sect-head"><h2>Today, ${fmtDW(t)}</h2><button class="btn ghost sm" data-act="tab" data-k="school">Timetable</button></div>${classesH}</section>` +
     `<section class="stack"><div class="sect-head"><h2>Coming up</h2></div>${nextH}</section>` +
     `<section class="stack"><div class="sect-head"><h2>This month</h2><button class="btn ghost sm" data-act="tab" data-k="money">Money</button></div>${budgetCard(t.slice(0,7), true)}</section>`;
@@ -1102,7 +1094,7 @@ function sent(){ try { return JSON.parse(localStorage.getItem("xc.notified")||"{
 async function notify(title, body, key){
   const s = sent(); if (key && s[key]) return; if (key){ s[key] = Date.now(); try { localStorage.setItem("xc.notified", JSON.stringify(s)); } catch(e){} }
   if (!notifyOn()) return;
-  const opts = {body, icon:"icons/mantou-192.png", badge:"icons/mantou-192.png", tag:key||undefined};
+  const opts = {body, icon:"icons/bun-192.png", badge:"icons/bun-192.png", tag:key||undefined};
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) return reg.showNotification(title, opts); } catch(e){}
   try { new Notification(title, opts); } catch(e){}
 }
@@ -1133,7 +1125,7 @@ setInterval(runChecks, 5*60*1000);
    as its usage policy asks, and cached on the phone (xc.geo) so each address is looked up once. */
 const MAP = {map:null, layer:null, show:{bucket:true, places:true, housing:true, trips:true}, queue:[], timer:null, view:null};
 let GEO = {}; try { GEO = JSON.parse(localStorage.getItem("xc.geo")||"{}"); } catch(e){}
-const MAP_KINDS = {bucket:["Bucket list","#B7791F"], places:["Saved places","#2F7DB8"], housing:["Flats","#B3392F"], trips:["Trips","#0B6E69"]};
+const MAP_KINDS = {bucket:["Bucket list","#FFC75F"], places:["Saved places","#2F7DB8"], housing:["Flats","#B3392F"], trips:["Trips","#FF8A1F"]};
 function mapItems(){
   const out = [];
   if (MAP.show.bucket) S.bucket.forEach(b=>out.push({k:"bucket", q:[b.city,b.country].filter(Boolean).join(", "), t:[b.city,b.country].filter(Boolean).join(", "), s:[b.tierG,b.todo].filter(Boolean).join(" · "), sec:"bucket", id:b.id}));
@@ -1216,10 +1208,10 @@ const STARTER = [["Passport","Before departure"],["Visa / residence permit paper
 /* ---------- export / import ---------- */
 async function exportData(){
   const json = JSON.stringify({app:"exchange-companion",version:1,exportedAt:new Date().toISOString(),data:S},null,2);
-  const name = "exchange-backup-"+today()+".json", msg = document.getElementById("ioMsg");
+  const name = "mantou-backup-"+today()+".json", msg = document.getElementById("ioMsg");
   try {
     const file = new File([json], name, {type:"application/json"});
-    if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"Exchange backup"}); if (msg) msg.textContent = "Backup shared."; return; }
+    if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"Mantou backup"}); if (msg) msg.textContent = "Backup shared."; return; }
   } catch(e){ if (e && e.name==="AbortError") return; }
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([json],{type:"application/json"})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 4000); if (msg) msg.textContent = "Backup downloaded.";
@@ -1227,7 +1219,7 @@ async function exportData(){
 document.getElementById("receiptFile").addEventListener("change", ev=>onReceipt(ev.target.files[0]));
 document.getElementById("importFile").addEventListener("change", ev=>{
   const f = ev.target.files[0]; if (!f) return; const r = new FileReader();
-  r.onload = () => { try { const j = JSON.parse(r.result); if (!j || !j.data || !j.data.settings) throw 0; S = blank(); merge(j.data); save(...SECTIONS); toast("Backup imported"); } catch(e){ const m = document.getElementById("ioMsg"); if (m) m.textContent = "That file isn't an Exchange Companion backup."; } ev.target.value = ""; };
+  r.onload = () => { try { const j = JSON.parse(r.result); if (!j || !j.data || !j.data.settings) throw 0; S = blank(); merge(j.data); save(...SECTIONS); toast("Backup imported"); } catch(e){ const m = document.getElementById("ioMsg"); if (m) m.textContent = "That file isn't a Mantou backup."; } ev.target.value = ""; };
   r.readAsText(f);
 });
 
@@ -1442,7 +1434,7 @@ document.addEventListener("click", ev=>{
     case "shOpen": SH.open = ds.id || null; SH.seg = "plan"; render(); window.scrollTo(0,0); break;
     case "shSeg": SH.seg = ds.k; render(); break;
     case "invite": { const url = location.origin + location.pathname + "#join=" + SH.open; const tr = shTrip(SH.open);
-      const text = "Join our trip \""+(tr?tr.name:"")+"\" in Exchange Companion: ";
+      const text = "Join our trip \""+(tr?tr.name:"")+"\" in Mantou: ";
       if (navigator.share){ navigator.share({title:tr?tr.name:"Trip", text, url}).catch(()=>{}); }
       else navigator.clipboard.writeText(url).then(()=>toast("Invite link copied"),()=>toast(url));
       break; }

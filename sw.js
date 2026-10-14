@@ -1,6 +1,6 @@
 // Offline support: keep a copy of the app so it opens without a connection.
-const CACHE = "mantou-v6";
-const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "icons/mantou.svg", "icons/mantou-192.png", "icons/mantou-apple-180.png"];
+const CACHE = "mantou-v7";
+const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "icons/mantou-photo.jpg", "icons/bun-192.png", "icons/bun-apple-180.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
