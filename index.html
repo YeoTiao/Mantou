@@ -68,6 +68,19 @@ h3{font-size:1rem}
 .gbtn svg{background:#fff;border-radius:4px;padding:2px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .mapbox{height:62vh;min-height:320px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--sunk);z-index:0}
+.mapbox.world{background:#0a0a0a;height:52vh}
+.world .leaflet-container,.mapbox.world{background:#0a0a0a}
+.stop-dot{background:var(--accent);color:var(--accent-ink);border-radius:50%;display:grid!important;place-items:center;font:700 11px/1 var(--mono);box-shadow:0 0 0 2px #0a0a0a}
+.stop-dot.planned{background:#0a0a0a;color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.stop-dot.home{background:#fff;color:#0a0a0a}
+.leg-ic{font-size:15px;display:grid!important;place-items:center;filter:drop-shadow(0 0 2px #000)}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center}
+.stat .n{font-family:var(--display);font-size:1.5rem;font-weight:700;color:var(--accent)}
+.stat .l{font-size:.72rem;color:var(--muted)}
+.flag{font-size:1.4rem;width:30px;text-align:center}
+.leaflet-tooltip{background:#111;color:#fff;border-color:#333}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#171717;color:#F6F1EA}
 .save-pill{font-size:.75rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .save-pill.ok{background:var(--accent-soft);color:var(--accent)}
 
@@ -216,7 +229,7 @@ const DEFAULT_RATES_SGD = {CZK:0.057,HUF:0.0036,PLN:0.33,ISK:0.0095,TRY:0.033,RO
 const CATS = ["Rent","Food","Groceries","Transport","Travel","School","Fun","Shopping","Phone & bills","Other"];
 const CAT_COLORS = {"Rent":"#6C5BA8","Food":"#D0743C","Groceries":"#4F9A55","Transport":"#2F7DB8","Travel":"#FF8A1F","School":"#B08A1E","Fun":"#C2508A","Shopping":"#8C6A4E","Phone & bills":"#5E7681","Other":"#8A8F93","Shared trips":"#FF8A1F"};
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal","housing","bucket"];
+const SECTIONS = ["settings","expenses","trips","plans","flights","stays","classes","deadlines","wallet","packing","contacts","places","journal","housing","bucket","stops"];
 // Lists that mirror the WooHoo Google Sheets (see sheets-sync/Code.gs).
 const SHEET_GROUPS = ["Daily","Monthly","Pre-Trip","Travel"];
 const SUB2CAT = {"Accoms":"Travel","Activity":"Fun","Baggage":"Travel","Food":"Food","Gym":"Fun","Haircut":"Other","Housing - Application":"Rent","Housing - Rent":"Rent","Housing - Security Deposit":"Rent","Laundry":"Other","Mobile Data":"Phone & bills","NIL":"Other","Others":"Other","Shopping":"Shopping","Shopping/Health":"Shopping","Transport - Car Hire":"Transport","Transport - Car Rental":"Transport","Transport - Flight":"Travel","Transport - Train/Bus":"Transport","Visa":"School"};
@@ -477,7 +490,7 @@ const SCHEMA = {
     {k:"paidBy",label:"Paid by",type:"text",def:"me",hint:"\"me\" or a friend's name"},{k:"splitWith",label:"Split with",type:"text",hint:"Friends' names, comma separated"},
     {k:"tripId",label:"Trip",type:"select",opts:tripOpts,full:true},
     {k:"group",label:"Sheet type",type:"select",opts:()=>[["","Auto"]].concat(SHEET_GROUPS.map(x=>[x,x])),hint:"Daily, Monthly, Pre-Trip or Travel in your budget sheet"},{k:"city",label:"City / country",type:"text"}]},
-  trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"wanderlog",label:"Wanderlog trip link",type:"text",full:true,hint:"In Wanderlog, tap Share › Copy link and paste it here"},{k:"note",label:"Notes",type:"textarea",full:true}]},
+  trips:{title:"Trip", fields:[{k:"name",label:"Trip name",type:"text",req:true,full:true},{k:"dest",label:"Destination",type:"text",full:true},{k:"start",label:"Start",type:"date",req:true},{k:"end",label:"End",type:"date",req:true},{k:"budget",label:"Trip budget (home currency)",type:"number"},{k:"cc",label:"Country",type:"select",opts:()=>COUNTRY_OPTS(),full:true},{k:"transport",label:"Getting there",type:"select",opts:()=>[["","Not sure yet"]].concat(TRANSPORT.map(([k,i,l])=>[k,i+" "+l]))},{k:"transportBack",label:"Coming back",type:"select",opts:()=>[["","Same way"]].concat(TRANSPORT.map(([k,i,l])=>[k,i+" "+l]))},{k:"wanderlog",label:"Wanderlog trip link",type:"text",full:true,hint:"In Wanderlog, tap Share › Copy link and paste it here"},{k:"note",label:"Notes",type:"textarea",full:true}]},
   plans:{title:"Plan", fields:[{k:"title",label:"What",type:"text",req:true,full:true},{k:"date",label:"Date",type:"date",req:true},{k:"time",label:"Time",type:"time"},{k:"place",label:"Where",type:"text",full:true},{k:"note",label:"Notes",type:"textarea",full:true}]},
   flights:{title:"Flight", fields:[{k:"from",label:"From (airport code)",type:"text",req:true,upper:true},{k:"to",label:"To (airport code)",type:"text",req:true,upper:true},
     {k:"dep",label:"Departs",type:"datetime-local",req:true},{k:"arr",label:"Arrives",type:"datetime-local"},{k:"airline",label:"Airline",type:"text"},{k:"num",label:"Flight no.",type:"text",upper:true},
@@ -506,6 +519,9 @@ const SCHEMA = {
     {k:"notes",label:"Other notes",type:"textarea",full:true},{k:"nearby",label:"Nearby stuff",type:"textarea",full:true}]},
   bucket:{title:"Place to visit", fields:[{k:"country",label:"Country",type:"text",req:true},{k:"city",label:"City",type:"text"},
     {k:"tierG",label:"My tier",type:"select",opts:()=>[["","No tier"]].concat(TIERS.map(x=>[x,x])),full:true},{k:"start",label:"From",type:"date"},{k:"end",label:"To",type:"date"},{k:"todo",label:"Stuff to do",type:"text",full:true}]},
+  stops:{title:"Place", fields:[{k:"cc",label:"Country",type:"select",opts:()=>COUNTRY_OPTS(),req:true,full:true},{k:"city",label:"City",type:"text",full:true,hint:"Leave empty to just mark the country"},
+    {k:"date",label:"Arrived",type:"date",hint:"Leave empty for places you went before"},{k:"transport",label:"How you got there",type:"select",opts:()=>[["","—"]].concat(TRANSPORT.map(([k,i,l])=>[k,i+" "+l]))},
+    {k:"tripId",label:"Part of trip",type:"select",opts:tripOpts,full:true},{k:"note",label:"Notes",type:"text",full:true}]},
   journal:{title:"Journal entry", fields:[{k:"date",label:"Date",type:"date",def:today},{k:"title",label:"Title",type:"text",req:true},{k:"text",label:"What happened",type:"textarea",full:true}]}
 };
 
@@ -713,10 +729,11 @@ function viewMoney(){
 
 function viewTravel(){
   const seg = ui.travelSeg;
-  const segH = `<div class="seg" role="group" aria-label="Travel view">${[["trips","My trips"],["friends","With friends"],["flights","Flights"],["stays","Stays"]].map(([k,l])=>`<button data-act="tseg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
+  const segH = `<div class="seg" role="group" aria-label="Travel view">${[["trips","Trips"],["world","World"],["friends","Friends"],["flights","Flights"],["stays","Stays"]].map(([k,l])=>`<button data-act="tseg" data-k="${k}" aria-pressed="${seg===k}">${l}</button>`).join("")}</div>`;
   let body = "";
   if (seg==="trips") body = ui.openTrip ? tripDetail(ui.openTrip) : tripList();
   if (seg==="friends") body = friendsView();
+  if (seg==="world") body = viewWorld();
   if (seg==="flights") body = flightList();
   if (seg==="stays") body = stayList();
   return topBar("Travel", "Trips, flights and places to stay") + examplesBanner() + segH + body;
@@ -1136,12 +1153,13 @@ function mapItems(){
 }
 function geoNext(){
   if (MAP.timer) return;
-  const q = MAP.queue.shift(); if (!q){ paintMapMsg(); return; }
+  const q = MAP.queue.shift(); if (!q){ paintMapMsg(); if (ui.tab==="travel" && ui.travelSeg==="world" && MAP.fresh && !document.querySelector(".sheet")){ MAP.fresh = false; render(); } return; }
   if (GEO[q]!==undefined) return geoNext();
   MAP.timer = setTimeout(async ()=>{
-    try { const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=en&q="+encodeURIComponent(q)); const j = await r.json();
-      GEO[q] = j && j[0] ? [Number(j[0].lat), Number(j[0].lon)] : null; try { localStorage.setItem("xc.geo", JSON.stringify(GEO)); } catch(e){} } catch(e){ MAP.queue.push(q); }
-    MAP.timer = null; drawMarkers(); geoNext();
+    try { const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&accept-language=en&q="+encodeURIComponent(q)); const j = await r.json();
+      GEO[q] = j && j[0] ? [Number(j[0].lat), Number(j[0].lon)] : null; MAP.fresh = true;
+      if (j && j[0] && j[0].address && j[0].address.country_code) GEO["cc:"+q] = j[0].address.country_code.toUpperCase(); try { localStorage.setItem("xc.geo", JSON.stringify(GEO)); } catch(e){} } catch(e){ MAP.queue.push(q); }
+    MAP.timer = null; drawMarkers(); drawWorld(); geoNext();
   }, 1100);
   paintMapMsg();
 }
@@ -1175,6 +1193,140 @@ function viewMap(){
   const chips = Object.entries(MAP_KINDS).map(([k,[l,c]])=>`<button class="chip" data-act="mapKind" data-k="${k}" aria-pressed="${MAP.show[k]}" style="background:var(--surface);${MAP.show[k]?`border-color:${c};color:${c}`:"opacity:.55"}"><span class="dot" style="background:${c};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${l}</button>`).join("");
   const n = mapItems().length;
   return `<div class="row" style="flex-wrap:wrap;gap:6px">${chips}</div><div id="map" class="mapbox"></div><div class="small muted" id="mapMsg"></div>${n?"":`<div class="empty">Add places to your bucket list, saved places, flats or trips and they'll show up here.</div>`}`;
+}
+
+/* ---------- world travel map ----------
+   Countries light up as you travel: planned = faint orange, visited (date passed) = solid orange.
+   Places come from Travel › World "stops" plus your trips (a trip with no stops of its own
+   counts as one stop at its destination). The route joins dated stops in order, returning to
+   your exchange city after each trip, with the way you travelled on each leg.
+   Country shapes: world-atlas 50m (Natural Earth), vendored in data/ so it works offline. */
+const WORLD_A2 = "ADAEAFAGAIALAMAOAQARASATAUAWAXAZBABBBDBEBFBGBHBIBJBLBMBNBOBRBSBTBWBYBZCACDCFCGCHCICKCLCMCNCOCRCUCVCWCYCZDEDJDKDMDODZECEEEGEHERESETFIFJFKFMFOFRGAGBGDGEGGGHGLGMGNGQGRGSGTGUGWGYHKHMHNHRHTHUIDIEILIMINIOIQIRISITJEJMJOJPKEKGKHKIKMKNKPKRKWKYKZLALBLCLILKLRLSLTLULVLYMAMCMDMEMFMGMHMKMLMMMNMOMPMRMSMTMUMVMWMXMYMZNANCNENFNGNINLNONPNRNUNZOMPAPEPFPGPHPKPLPMPNPRPSPTPWPYQARORSRURWSASBSCSDSESGSHSISKSLSMSNSOSRSSSTSVSXSYSZTCTDTFTGTHTJTLTMTNTOTRTTTWTZUAUGUSUYUZVAVCVEVGVIVNVUWFWSXKYEZAZMZW".match(/../g);
+const TRANSPORT = [["flight","✈️","Flight"],["train","🚆","Train"],["bus","🚌","Bus"],["car","🚗","Car"],["ferry","⛴️","Ferry"],["walk","🚶","On foot"]];
+const tIcon = k => (TRANSPORT.find(x=>x[0]===k)||[])[1]||"";
+const tName = k => (TRANSPORT.find(x=>x[0]===k)||[])[2]||"";
+let regionNames = null; try { regionNames = new Intl.DisplayNames(["en"], {type:"region"}); } catch(e){}
+const ccName = cc => { if (!cc) return ""; try { return regionNames ? regionNames.of(cc) : cc; } catch(e){ return cc; } };
+const COUNTRY_OPTS = () => [["","Choose a country"]].concat(WORLD_A2.map(c=>[c, ccName(c)]).sort((a,b)=>a[1].localeCompare(b[1])));
+const flag = cc => cc && cc.length===2 ? String.fromCodePoint(...[...cc.toUpperCase()].map(c=>127397+c.charCodeAt(0))) : "";
+function ccFromName(name){ const n = String(name||"").trim().toLowerCase(); if (!n) return ""; return WORLD_A2.find(c=>ccName(c).toLowerCase()===n) || ({"uk":"GB","england":"GB","scotland":"GB","usa":"US","czechia":"CZ","czech republic":"CZ","holland":"NL","korea":"KR"})[n] || ""; }
+function homeStop(){ const st = S.settings; return {home:true, cc:ccFromName(st.country)||"ES", city:st.city||"Madrid"}; }
+// Trip countries: the trip's own Country field, else its stops, else a guess from the destination text.
+function tripCC(t){ if (t.cc) return t.cc; const parts = String(t.dest||"").split(",").map(x=>x.trim()); for (let i=parts.length-1;i>=0;i--){ const c = ccFromName(parts[i]); if (c) return c; } return GEO["cc:"+t.dest]||""; }
+function allStops(){
+  const t = today(), home = homeStop(), out = [];
+  S.stops.forEach(s=>out.push(Object.assign({}, s, {src:"stop"})));
+  S.trips.forEach(tr=>{
+    const own = S.stops.filter(s=>s.tripId===tr.id && s.date);
+    if (!own.length && (tr.dest||tr.cc)) out.push({id:"trip-"+tr.id, src:"trip", tripId:tr.id, cc:tripCC(tr), city:String(tr.dest||"").split(",")[0].trim(), q:tr.dest||"", date:tr.start, transport:tr.transport||"", name:tr.name});
+    const last = own.length ? own.map(s=>s.date).sort().pop() : tr.start;
+    if (tr.end && (own.length || tr.dest || tr.cc)) out.push(Object.assign({}, home, {id:"ret-"+tr.id, src:"return", tripId:tr.id, date:tr.end>=last?tr.end:last, transport:tr.transportBack||tr.transport||""}));
+  });
+  out.forEach(s=>{ s.status = !s.date || s.date<=t ? "visited" : "planned"; });
+  return out;
+}
+function routeStops(){
+  const home = homeStop(), st = S.settings;
+  const dated = allStops().filter(s=>s.date).sort((a,b)=>a.date.localeCompare(b.date) || (a.src==="return")-(b.src==="return"));
+  const start = Object.assign({}, home, {id:"home", src:"home", date:st.start||"", status:st.start&&st.start<=today()?"visited":"planned"});
+  const r = [start].concat(dated);
+  // drop "back home" hops that go nowhere (home → home)
+  return r.filter((s,i)=>!(i>0 && s.home && r[i-1].home));
+}
+function worldStats(){
+  const stops = allStops().concat([Object.assign(homeStop(), {status:S.settings.start&&S.settings.start<=today()?"visited":"planned"})]);
+  const visited = new Set(), planned = new Set(), cities = new Set();
+  stops.forEach(s=>{ if (!s.cc) return; if (s.status==="visited"){ visited.add(s.cc); if (s.city) cities.add(s.city.toLowerCase()+"|"+s.cc); } else planned.add(s.cc); });
+  visited.forEach(c=>planned.delete(c));
+  const r = routeStops(); let km = 0; const byT = {};
+  for (let i=1;i<r.length;i++){ const a = stopLL(r[i-1]), b = stopLL(r[i]); if (!a||!b || r[i].status!=="visited") continue; const d = haversine(a,b); km += d; const k = r[i].transport||"other"; byT[k] = (byT[k]||0)+d; }
+  return {visited, planned, cities, km, byT};
+}
+function haversine(a,b){ const R=6371, toR=x=>x*Math.PI/180, dLa=toR(b[0]-a[0]), dLo=toR(b[1]-a[1]); const h = Math.sin(dLa/2)**2 + Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+const WORLD = {topo:null, geo:null, centers:{}, map:null, layer:null, route:true, loading:null};
+function stopQuery(s){ return s.q || (s.city ? s.city+(s.cc?", "+ccName(s.cc):"") : ""); }
+function stopLL(s){ const q = stopQuery(s); if (q && Array.isArray(GEO[q])) return GEO[q]; return s.cc && WORLD.centers[s.cc] || null; }
+async function loadWorld(){
+  if (WORLD.geo) return; if (WORLD.loading) return WORLD.loading;
+  WORLD.loading = (async ()=>{
+    if (!window.topojson) await loadScript("vendor/topojson-client.min.js");
+    const topo = await (await fetch("data/world-50m.json")).json();
+    WORLD.geo = topojson.feature(topo, topo.objects.countries);
+    // label point per country: centre of its largest polygon (so France isn't placed in the Atlantic)
+    WORLD.geo.features.forEach(f=>{ const cc = f.properties.a2; if (!cc || WORLD.centers[cc]) return;
+      const polys = f.geometry.type==="Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates; let best = null, area = -1;
+      polys.forEach(p=>{ const ring = p[0]; let x0=180,x1=-180,y0=90,y1=-90; ring.forEach(([x,y])=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }); const a=(x1-x0)*(y1-y0); if (a>area){ area=a; best=[(y0+y1)/2,(x0+x1)/2]; } });
+      WORLD.centers[cc] = best; });
+  })();
+  return WORLD.loading;
+}
+function arc(a, b, n=24){ // gentle curve between two points, bowed sideways
+  const pts = [], mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2, dx=b[1]-a[1], dy=b[0]-a[0], k=0.18;
+  const c = [mx + dx*k, my - dy*k];
+  for (let i=0;i<=n;i++){ const t=i/n, u=1-t; pts.push([u*u*a[0]+2*u*t*c[0]+t*t*b[0], u*u*a[1]+2*u*t*c[1]+t*t*b[1]]); }
+  return pts;
+}
+function drawWorld(){
+  if (!WORLD.map || !WORLD.geo) return;
+  const css = getComputedStyle(document.documentElement), acc = css.getPropertyValue("--accent").trim()||"#FF8A1F";
+  const s = worldStats();
+  WORLD.layer.clearLayers();
+  L.geoJSON(WORLD.geo, {style:f=>{ const cc = f.properties.a2, v = s.visited.has(cc), p = s.planned.has(cc);
+    return {color: v||p ? acc : "#3a3a3a", weight: v?1:p?1:.5, dashArray: p?"3 3":null, fillColor: v||p ? acc : "#1e1e1e", fillOpacity: v?.85:p?.28:1}; },
+    onEachFeature:(f,l)=>{ const cc = f.properties.a2; l.bindTooltip(flag(cc)+" "+(ccName(cc)||f.properties.name)+(s.visited.has(cc)?" · visited":s.planned.has(cc)?" · planned":""), {sticky:true}); }
+  }).addTo(WORLD.layer);
+  const r = routeStops(); const pts = [];
+  r.forEach((st,i)=>{ const ll = stopLL(st); if (!ll) return; pts.push(ll);
+    if (WORLD.route && i>0){ const prev = r.slice(0,i).reverse().find(x=>stopLL(x)); const a = prev && stopLL(prev);
+      if (a && (a[0]!==ll[0] || a[1]!==ll[1])){ const line = arc(a, ll); const planned = st.status!=="visited";
+        L.polyline(line, {color:acc, weight:2, opacity:planned?.6:.95, dashArray:planned?"6 6":null}).addTo(WORLD.layer);
+        const ic = tIcon(st.transport); if (ic) L.marker(line[Math.floor(line.length/2)], {icon:L.divIcon({className:"leg-ic", html:ic, iconSize:[22,22]}), interactive:false}).addTo(WORLD.layer); } }
+  });
+  // one dot per place, numbered by first visit
+  const seen = new Map(); let n = 0;
+  r.forEach(st=>{ const ll = stopLL(st); if (!ll) return; const key = ll.join(","); if (!seen.has(key)) seen.set(key, {ll, n:++n, st, list:[]}); seen.get(key).list.push(st); });
+  allStops().filter(x=>!x.date).forEach(st=>{ const ll = stopLL(st); if (!ll) return; const key = ll.join(","); if (!seen.has(key)) seen.set(key, {ll, n:"", st, list:[st]}); });
+  seen.forEach(({ll,n,st,list})=>{ const planned = list.every(x=>x.status!=="visited") && !st.home;
+    L.marker(ll, {icon:L.divIcon({className:"stop-dot"+(planned?" planned":"")+(st.home?" home":""), html:st.home?"★":String(n||"•"), iconSize:[22,22]})}).addTo(WORLD.layer)
+      .bindPopup(`<b>${flag(st.cc)} ${esc(st.city||ccName(st.cc))}${st.home?" (home)":""}</b><br>${list.filter(x=>x.date).map(x=>`${fmtD(x.date,{day:"numeric",month:"short",year:"numeric"})}${x.transport?" · "+tIcon(x.transport)+" "+tName(x.transport):""}`).join("<br>")||"Visited"}`); });
+  if (!WORLD.fitted){ WORLD.fitted = true; const b = pts.length>1 ? L.latLngBounds(pts) : null; if (b) WORLD.map.fitBounds(b, {padding:[30,30], maxZoom:5}); else WORLD.map.setView([45,10], 3); }
+}
+async function mountWorld(){
+  const el = document.getElementById("world"); if (!el || el.dataset.ready) return; el.dataset.ready = "1";
+  try {
+    if (!window.L){ const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css); await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"); }
+    await loadWorld();
+  } catch(e){ el.innerHTML = `<div class="empty">The map couldn't load. Check your connection and try again.</div>`; return; }
+  if (!document.body.contains(el)) return;
+  const view = WORLD.map ? {c:WORLD.map.getCenter(), z:WORLD.map.getZoom()} : null; if (WORLD.map) WORLD.map.remove();
+  WORLD.map = L.map(el, {zoomControl:true, attributionControl:true, worldCopyJump:true, minZoom:1, maxZoom:8});
+  WORLD.map.attributionControl.setPrefix(false).addAttribution("Natural Earth");
+  if (view){ WORLD.map.setView(view.c, view.z); WORLD.fitted = true; } else WORLD.fitted = false;
+  WORLD.layer = L.layerGroup().addTo(WORLD.map);
+  drawWorld();
+  // look up city coordinates we don't have yet (OpenStreetMap, cached on the phone)
+  allStops().concat(routeStops()).forEach(s=>{ const q = stopQuery(s); if (q && GEO[q]===undefined && !MAP.queue.includes(q)) MAP.queue.push(q); }); geoNext();
+}
+function viewWorld(){
+  const s = worldStats(), t = today();
+  const stats = `<div class="stat-row">
+    <div class="stat"><div class="n">${s.visited.size}</div><div class="l">countries</div></div>
+    <div class="stat"><div class="n">${s.cities.size}</div><div class="l">cities</div></div>
+    <div class="stat"><div class="n">${s.km>=1000?(s.km/1000).toFixed(1)+"k":Math.round(s.km)}</div><div class="l">km travelled</div></div>
+    <div class="stat"><div class="n">${s.planned.size}</div><div class="l">planned</div></div></div>`;
+  const byT = Object.entries(s.byT).filter(([,v])=>v>1).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="tag">${tIcon(k)||"•"} ${esc(tName(k)||"Other")} ${Math.round(v).toLocaleString()} km</span>`).join(" ");
+  const r = routeStops().slice(1).filter(x=>x.src!=="return").reverse();
+  const undated = allStops().filter(x=>!x.date);
+  const row = x=>{ const tr = x.tripId && S.trips.find(t=>t.id===x.tripId);
+    const act = x.src==="stop" ? `data-act="edit" data-sec="stops" data-id="${x.id}"` : `data-act="trip" data-id="${x.tripId}"`;
+    return `<button class="item" ${act}><span class="flag">${flag(x.cc)||"🌍"}</span><div class="main"><div class="t">${esc(x.city||ccName(x.cc)||"Somewhere")}${x.city&&x.cc?` <span class="muted small">${esc(ccName(x.cc))}</span>`:""}</div><div class="s">${esc([x.date?fmtD(x.date,{day:"numeric",month:"short",year:"numeric"}):"", x.transport?tIcon(x.transport)+" "+tName(x.transport):"", tr?tr.name:""].filter(Boolean).join(" · "))}</div></div><span class="tag${x.status==="visited"?" good":" stamp"}">${x.status==="visited"?"Been":"Planned"}</span></button>`; };
+  return stats + (byT?`<div class="row" style="flex-wrap:wrap;gap:6px">${byT}</div>`:"") +
+    `<div id="world" class="mapbox world"></div>
+     <div class="row between"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-act="worldRoute"${WORLD.route?" checked":""}> Show route</label><span class="small muted" id="mapMsg"></span></div>
+     <div class="row" style="gap:8px"><button class="btn primary" data-act="add" data-sec="stops" style="flex:1">Add a place</button><button class="btn" data-act="add" data-sec="trips" style="flex:1">Plan a trip</button></div>
+     <div class="hint">Trips show up here on their own. Add places you've already been, or the cities on a multi-stop trip, with how you got there. Faint orange means planned; solid orange means you've been.</div>
+     ${r.length?`<section class="stack"><h2>Your route</h2><div class="list">${r.map(row).join("")}</div></section>`:""}
+     ${undated.length?`<section class="stack"><h2>Been before</h2><div class="list">${undated.map(row).join("")}</div></section>`:""}`;
 }
 
 /* ---------- examples ---------- */
@@ -1397,6 +1549,7 @@ function render(){
   const v = {home:viewHome, money:viewMoney, travel:viewTravel, school:viewSchool, more:viewMore}[ui.tab] || viewHome;
   document.getElementById("app").innerHTML = v();
   if (ui.tab==="more" && ui.more==="map") mountMap();
+  if (ui.tab==="travel" && ui.travelSeg==="world") mountWorld();
 }
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-act]"); if (!el) return;
@@ -1456,6 +1609,7 @@ document.addEventListener("click", ev=>{
     case "notifyOff": S.settings.notify = false; save("settings"); toast("Notifications off"); break;
     case "ratesNow": refreshRates(true); break;
     case "autoRates": S.settings.autoRates = el.checked; save("settings"); if (el.checked) refreshRates(true); break;
+    case "worldRoute": WORLD.route = el.checked; drawWorld(); break;
     case "mapKind": MAP.show[ds.k] = !MAP.show[ds.k]; render(); break;
     case "unameSave": claimName(); break;
     case "unameEdit": UNAME.editing = true; UNAME.draft = null; render(); break;
